@@ -191,6 +191,9 @@ public class ItemsFilter {
         blocked.add("trailblazer reloaded relic hunter (t1)");
         blocked.add("trailblazer reloaded relic hunter (t2)");
         blocked.add("trailblazer reloaded relic hunter (t3)");
+        blocked.add("trailblazer reloaded headband (t1)");
+        blocked.add("trailblazer reloaded headband (t2)");
+        blocked.add("trailblazer reloaded headband (t3)");
         blocked.add("raging echoes banner");
         blocked.add("raging echoes relic hunter (t1)");
         blocked.add("raging echoes relic hunter (t2)");
