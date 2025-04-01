@@ -257,10 +257,10 @@ public class ItemsFilter {
         blocked.add("echo virtus robes orn kit (pack of 3)");
         blocked.add("echo venator bow orn kit");
         
-        // Additional blocked items (Flatpacks and sets NOTE: not all flatpaks were added, some share exact names with their drink counterpart and therefore would block both items)
+        // Additional blocked items (Flatpacks and sets NOTE: not all flatpaks were added, some share exact names with their drink counterpart and therefore would block both items. only ways to fix this is to hardcode it or change blocklist format to IDs or Runelites NameIDS)
         //Flatpacks
         //blocked.add("armillary sphere"); exists only in game cache
-        //blocked.add("asgarnian ale"); //Flatpack shares name with the drink so can't add it to block list, only ways to fix this is to hardcode it or change blocklist format to IDs or Runelites NameIDS
+        //blocked.add("asgarnian ale"); //flatpack shares name with drink
         blocked.add("beer barrel");
         blocked.add("bookcase");
         blocked.add("carved oak bench");
