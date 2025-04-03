@@ -139,7 +139,7 @@ public class ChanceManPlugin extends Plugin
                     {
                         continue;
                     }
-                    if (ItemsFilter.isGudiBlocked(comp.getName()))
+                    if (config.gudiRuleSet() && ItemsFilter.isGudiBlocked(comp.getName()))
                     {
                         continue;
                     }                 
