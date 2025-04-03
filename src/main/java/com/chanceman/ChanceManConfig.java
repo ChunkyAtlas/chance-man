@@ -12,7 +12,16 @@ public interface ChanceManConfig extends Config
             name = "Free To Play Mode",
             description = "Only allow free-to-play items"
     )
+    @ConfigItem(
+            keyName = "gudiRuleSet",
+            name = "Gudi Rule Set",
+            description = "Blocks more items (Flatpacks and Sets and Poisoned weapons are locked until equivalent weapon poison and base weapon is unlocked)"
+    )
     default boolean freeToPlay()
+    {
+        return false;
+    }
+    default boolean gudiRuleSet()
     {
         return false;
     }
