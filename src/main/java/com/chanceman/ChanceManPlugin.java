@@ -139,6 +139,10 @@ public class ChanceManPlugin extends Plugin
                     {
                         continue;
                     }
+                    if (config.noFlatpacks() && ItemsFilter.isFpBlocked(comp.getName()) || config.noSets() && ItemsFilter.isSetBlocked(comp.getName()) || config.noPoisoned() && ItemsFilter.isPoisonedBlocked(comp.getName()))
+                    {
+                        continue;
+                    }                 
                     allTradeableItems.add(i);
                 }
             }
@@ -153,7 +157,7 @@ public class ChanceManPlugin extends Plugin
         if (!event.getGroup().equals("chanceman")) {
             return;
         }
-        if (event.getKey().equals("freeToPlay")) {
+        if (event.getKey().equals("freeToPlay") || event.getKey().equals("noFlatpacks") || event.getKey().equals("noSets") || event.getKey().equals("NoPoisoned")) {
             refreshTradeableItems();
         }
     }
