@@ -4,6 +4,7 @@ import net.runelite.api.ItemComposition;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.PluginPanel;
+import net.runelite.client.util.LinkBrowser;
 
 import javax.swing.*;
 import javax.swing.border.*;
@@ -14,6 +15,7 @@ import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.List;
 import java.util.function.Consumer;
+import javax.swing.JColorChooser;
 
 /**
  * Panel for displaying rolled and unlocked items.
@@ -58,6 +60,15 @@ public class ChanceManPanel extends PluginPanel
 
     // Active filter: "NONE", "UNLOCKED_NOT_ROLLED", or "UNLOCKED_AND_ROLLED"
     private String activeFilter = "NONE";
+
+    // Join Discord Button links to discord invite
+    private final JButton discordButton = new JButton();
+
+    // Default color for item text
+    private final Color defaultItemTextColor = new Color(220, 220, 220);
+
+    // Map to hold custom text colors for specific items (key: itemId, value: chosen Color)
+    private final Map<Integer, Color> itemTextColorMap = new HashMap<>();
 
     /**
      * Constructs a ChanceManPanel.
@@ -300,16 +311,35 @@ public class ChanceManPanel extends PluginPanel
         JPanel headerPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         headerPanel.setOpaque(false);
 
+        // Header icon
         ImageIcon headerIcon = new ImageIcon(getClass().getResource("/net/runelite/client/plugins/chanceman/icon.png"));
         JLabel iconLabel = new JLabel(headerIcon);
 
+        // Title label
         JLabel titleLabel = new JLabel("Chance Man");
         titleLabel.setFont(new Font("SansSerif", Font.BOLD, 18));
         titleLabel.setForeground(new Color(220, 220, 220));
 
+        // Create the Discord button
+        JButton discordButton = new JButton();
+        discordButton.setToolTipText("Join The Chance Man Discord");
+        // Scale the Discord icon to 16x16
+        ImageIcon discordIcon = new ImageIcon(getClass().getResource("/net/runelite/client/plugins/chanceman/discord.png"));
+        Image scaledImage = discordIcon.getImage().getScaledInstance(20, 20, Image.SCALE_SMOOTH);
+        discordButton.setIcon(new ImageIcon(scaledImage));
+        // Make the button look flat (no border or background)
+        discordButton.setOpaque(false);
+        discordButton.setContentAreaFilled(false);
+        discordButton.setBorderPainted(false);
+        // Add an action to open the Discord link
+        discordButton.addActionListener(e -> LinkBrowser.browse("https://discord.gg/TMkAYXxncU"));
+
+        // Assemble the header panel
         headerPanel.add(iconLabel);
         headerPanel.add(Box.createHorizontalStrut(10));
         headerPanel.add(titleLabel);
+        headerPanel.add(discordButton);
+
         return headerPanel;
     }
 
@@ -525,10 +555,13 @@ public class ChanceManPanel extends PluginPanel
         // Add a small horizontal gap between the icon and the name label
         itemPanel.add(Box.createHorizontalStrut(5));
 
-        // Create and add the name label
+        // Determine the text color for this item: either a custom color or the default
+        Color textColor = itemTextColorMap.getOrDefault(itemId, defaultItemTextColor);
+
+        // Create and add the name label with the chosen text color
         String cachedName = itemNameCache.get(itemId);
         JLabel nameLabel = new JLabel(cachedName != null ? cachedName : "Loading...");
-        nameLabel.setForeground(new Color(220, 220, 220));
+        nameLabel.setForeground(textColor);
         nameLabel.setFont(new Font("SansSerif", Font.PLAIN, 11));
         nameLabel.setAlignmentY(Component.CENTER_ALIGNMENT);
         itemPanel.add(nameLabel);
@@ -555,7 +588,52 @@ public class ChanceManPanel extends PluginPanel
 
         // Constrain the panel's height to match the icon's height
         itemPanel.setMaximumSize(new Dimension(Integer.MAX_VALUE, 32));
+
+        // Add a mouse listener to show the context menu on right-click for this specific item
+        itemPanel.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mousePressed(java.awt.event.MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showItemTextColorPopup(e, itemId, nameLabel);
+                }
+            }
+            @Override
+            public void mouseReleased(java.awt.event.MouseEvent e) {
+                if (e.isPopupTrigger()) {
+                    showItemTextColorPopup(e, itemId, nameLabel);
+                }
+            }
+        });
+
         return itemPanel;
+    }
+
+    private void showItemTextColorPopup(java.awt.event.MouseEvent e, int itemId, JLabel label) {
+        JPopupMenu popup = new JPopupMenu();
+
+        JMenuItem changeColorItem = new JMenuItem("Change Text Color");
+        JMenuItem resetColorItem = new JMenuItem("Reset Color");
+
+        changeColorItem.addActionListener(ev -> {
+            // Get current color or default
+            Color currentColor = itemTextColorMap.getOrDefault(itemId, defaultItemTextColor);
+            Color chosen = JColorChooser.showDialog(ChanceManPanel.this, "Choose Text Color", currentColor);
+            if (chosen != null) {
+                // Save the chosen color and update the label
+                itemTextColorMap.put(itemId, chosen);
+                label.setForeground(chosen);
+            }
+        });
+
+        resetColorItem.addActionListener(ev -> {
+            // Remove any custom color for this item and revert to default
+            itemTextColorMap.remove(itemId);
+            label.setForeground(defaultItemTextColor);
+        });
+
+        popup.add(changeColorItem);
+        popup.add(resetColorItem);
+        popup.show(e.getComponent(), e.getX(), e.getY());
     }
 
     /**

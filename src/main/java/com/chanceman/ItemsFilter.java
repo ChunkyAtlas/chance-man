@@ -48,6 +48,7 @@ public class ItemsFilter {
         blocked.add("corrupted volatile nightmare staff");
         blocked.add("corrupted tumeken's shadow");
         blocked.add("corrupted tumeken's shadow (uncharged)");
+        blocked.add("corrupted scythe of vitur (uncharged)");
         blocked.add("morrigan's coif (deadman mode)");
         blocked.add("morrigan's javelin (deadman mode)");
         blocked.add("morrigan's leather body (deadman mode)");
@@ -161,12 +162,19 @@ public class ItemsFilter {
         blocked.add("twisted teleport scroll");
         blocked.add("twisted blueprints");
         blocked.add("twisted horns");
+        blocked.add("twisted cane");
+        blocked.add("twisted hat (t1)");
+        blocked.add("twisted hat (t2)");
+        blocked.add("twisted hat (t3)");
         blocked.add("twisted coat (t1)");
         blocked.add("twisted coat (t2)");
         blocked.add("twisted coat (t3)");
         blocked.add("twisted trousers (t1)");
         blocked.add("twisted trousers (t2)");
         blocked.add("twisted trousers (t3)");
+        blocked.add("twisted boots (t1)");
+        blocked.add("twisted boots (t2)");
+        blocked.add("twisted boots (t3)");
         blocked.add("twisted relic hunter (t1) armour set");
         blocked.add("twisted relic hunter (t2)");
         blocked.add("twisted relic hunter (t2) armour set");
@@ -175,6 +183,7 @@ public class ItemsFilter {
         blocked.add("trailblazer banner");
         blocked.add("trailblazer teleport scroll");
         blocked.add("trailblazer tool ornament kit");
+        blocked.add("trailblazer graceful ornament kit");
         blocked.add("trailblazer globe");
         blocked.add("trailblazer rug");
         blocked.add("trailblazer graceful dye (pack of 6)");
@@ -199,6 +208,7 @@ public class ItemsFilter {
         blocked.add("shattered teleport scroll");
         blocked.add("shattered relics variety ornament kit");
         blocked.add("shattered relics void ornament kit (pack of 6)");
+        blocked.add("shattered relics void ornament kit");
         blocked.add("shattered relics mystic ornament kit (pack of 5)");
         blocked.add("shattered relics mystic ornament kit");
         blocked.add("shattered cannon ornament kit (pack of 4)");
@@ -226,6 +236,7 @@ public class ItemsFilter {
         blocked.add("trailblazer reloaded alchemy scroll");
         blocked.add("trailblazer reloaded vengeance scroll");
         blocked.add("trailblazer reloaded rejuvenation pool scroll");
+        blocked.add("trailblazer reloaded torch");
         blocked.add("trailblazer reloaded blowpipe orn kit");
         blocked.add("trailblazer reloaded bulwark orn kit");
         blocked.add("trailblazer reloaded relic hunter (t1)");
@@ -246,6 +257,7 @@ public class ItemsFilter {
         blocked.add("trailblazer reloaded boots (t1)");
         blocked.add("trailblazer reloaded boots (t2)");
         blocked.add("trailblazer reloaded boots (t3)");
+        blocked.add("trailblazer reloaded blowpipe ornament kit");
         blocked.add("raging echoes banner");
         blocked.add("raging echoes relic hunter (t1)");
         blocked.add("raging echoes relic hunter (t1) armour set");

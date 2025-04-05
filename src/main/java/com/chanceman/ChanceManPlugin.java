@@ -1,5 +1,10 @@
 package com.chanceman;
 
+import com.chanceman.helpers.ChanceManSpellHelper;
+import com.chanceman.helpers.ToolActionHandler;
+import com.chanceman.helpers.SpellActionHandler;
+import com.chanceman.helpers.InventoryActionHandler;
+import com.chanceman.helpers.ToolActionMapping;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import net.runelite.api.Client;
@@ -65,6 +70,7 @@ public class ChanceManPlugin extends Plugin
     private ChanceManPanel chanceManPanel;
     private NavigationButton navButton;
     private ExecutorService fileExecutor;
+    private ChanceManSpellHelper spellHelper;
     private final List<Integer> allTradeableItems = new ArrayList<>();
     private static final int GE_SEARCH_BUILD_SCRIPT = 751;
     private boolean itemsInitialized = false;
@@ -119,17 +125,11 @@ public class ChanceManPlugin extends Plugin
 
     /**
      * Refreshes the list of tradeable item IDs based on the current configuration.
-     * Runs on the client thread. Iterates through item IDs 0–29999 and adds an item to allTradeableItems if:
-     * - The item is tradeable and is not blocked by ItemsFilter.
-     * - If the "freeToPlay" option is enabled, members-only items are skipped.
-     * - If the "noFlatpacks", "noSets" or "noPoisoned" option is enabled, it blocks those items as well from being rollable
-     * If the chanceManPanel is initialized, the panel is updated to reflect the refreshed list.
      */
     private void refreshTradeableItems()
     {
         clientThread.invokeLater(() -> {
             allTradeableItems.clear();
-            int count = 0;
             for (int i = 0; i < 30000; i++)
             {
                 ItemComposition comp = itemManager.getItemComposition(i);
@@ -144,7 +144,6 @@ public class ChanceManPlugin extends Plugin
                         continue;
                     }                 
                     allTradeableItems.add(i);
-                    count++;
                 }
             }
             if (chanceManPanel != null) {
@@ -153,11 +152,6 @@ public class ChanceManPlugin extends Plugin
         });
     }
 
-    /**
-     * Listens for configuration changes
-     * When the "freeToPlay" option changes, it refreshes the list of tradeable items.
-     * When the flatpack, sets or poisoned option changes, it refreshes tradeable items.
-     */
     @Subscribe
     public void onConfigChanged(net.runelite.client.events.ConfigChanged event) {
         if (!event.getGroup().equals("chanceman")) {
@@ -168,18 +162,13 @@ public class ChanceManPlugin extends Plugin
         }
     }
 
-    /**
-     * Processes game ticks, initializing managers and UI when the local player is available,
-     * updating the roll animation.
-     *
-     * @param event The game tick event.
-     */
     @Subscribe
     public void onGameTick(GameTick event)
     {
         if (client.getLocalPlayer() != null && !itemsInitialized)
         {
             String playerName = client.getLocalPlayer().getName();
+            spellHelper = new ChanceManSpellHelper(gson);
             unlockedItemsManager = new UnlockedItemsManager(playerName, gson, fileExecutor);
             unlockedItemsManager.loadUnlockedItems();
             rolledItemsManager = new RolledItemsManager(playerName, gson, fileExecutor);
@@ -211,7 +200,7 @@ public class ChanceManPlugin extends Plugin
                     .build();
             clientToolbar.addNavigation(navButton);
             overlayManager.add(chanceManOverlay);
-            refreshTradeableItems(); // Refresh once after initialization.
+            refreshTradeableItems();
             itemsInitialized = true;
         }
         if (rollAnimationManager != null)
@@ -224,11 +213,6 @@ public class ChanceManPlugin extends Plugin
         }
     }
 
-    /**
-     * Listens for the GE search build script to be fired (script ID 751).
-     * When triggered, it calls killSearchResults() to process the GE search results
-     * and block any offers for items that are not unlocked.
-     */
     @Subscribe
     public void onScriptPostFired(ScriptPostFired event) {
         if (event.getScriptId() == GE_SEARCH_BUILD_SCRIPT) {
@@ -236,10 +220,6 @@ public class ChanceManPlugin extends Plugin
         }
     }
 
-    /**
-     * Retrieves the GE search results widget (ComponentID.CHATBOX_GE_SEARCH_RESULTS 162:51) and processes its dynamic children.
-     * For each offer, if the offered item (child index 2) is locked, it hides the offer and reduces its opacity.
-     */
     private void killSearchResults() {
         Widget geSearchResults = client.getWidget(162, 51);
         if (geSearchResults == null) {
@@ -260,12 +240,6 @@ public class ChanceManPlugin extends Plugin
         }
     }
 
-    /**
-     * Handles the event when an item spawns on the ground.
-     * If the item has not been rolled (by item ID), it enqueues a roll.
-     *
-     * @param event The item spawned event.
-     */
     @Subscribe
     public void onItemSpawned(ItemSpawned event)
     {
@@ -285,7 +259,6 @@ public class ChanceManPlugin extends Plugin
                 itemId = mappedId;
             }
         }
-        // Convert to canonical (unnoted) ID
         int canonicalItemId = itemManager.canonicalize(itemId);
         if (!isTradeable(canonicalItemId) || isNotTracked(canonicalItemId))
         {
@@ -309,12 +282,6 @@ public class ChanceManPlugin extends Plugin
         }
     }
 
-    /**
-     * Handles inventory changes. When items are added to the inventory,
-     * this method checks for items (by item ID) that have not been rolled and enqueues a roll.
-     *
-     * @param event The item container changed event.
-     */
     @Subscribe
     public void onItemContainerChanged(ItemContainerChanged event)
     {
@@ -346,57 +313,28 @@ public class ChanceManPlugin extends Plugin
         }
     }
 
-    /**
-     * Handles menu option clicks.
-     * For ground items, it consumes actions if the item is locked.
-     * For inventory items, if the item is locked, only the "examine" and "drop" actions are allowed.
-     *
-     * @param event The menu option clicked event.
-     */
     @Subscribe
     public void onMenuOptionClicked(net.runelite.api.events.MenuOptionClicked event)
     {
         String option = event.getMenuEntry().getOption().toLowerCase();
-        // Handle ground item actions.
-        if (event.getMenuAction() != null &&
-                (event.getMenuAction().toString().contains("GROUND_ITEM") ||
-                        option.contains("take") || option.contains("pick-up") || option.contains("pickup")))
+
+        // 1. Handle tool/skilling actions.
+        if (!ToolActionHandler.handleToolAction(client, itemManager, unlockedItemsManager, ToolActionMapping.getToolActionMap(), event))
         {
-            int rawItemId = event.getId() != -1 ? event.getId() : event.getMenuEntry().getItemId();
-            int canonicalGroundId = itemManager.canonicalize(rawItemId);
-            if (isTradeable(canonicalGroundId) && !isNotTracked(canonicalGroundId)
-                    && unlockedItemsManager != null && !unlockedItemsManager.isUnlocked(canonicalGroundId))
-            {
-                event.consume();
-                return;
-            }
+            return;
         }
-        // Handle inventory item actions.
-        if (event.getMenuEntry().getItemId() != -1)
+
+        // 2. Handle spell casting actions.
+        if (!SpellActionHandler.handleSpellAction(client, itemManager, unlockedItemsManager, spellHelper, event))
         {
-            int rawItemId = event.getMenuEntry().getItemId();
-            int canonicalId = itemManager.canonicalize(rawItemId);
-            String itemName = getItemName(canonicalId).toLowerCase();
-            // Skip non-tradeable items and special cases
-            if (!isTradeable(canonicalId)
-                    || isNotTracked(canonicalId)
-                    || itemName.contains("coin pouch")
-                    || itemName.contains("clue scroll"))
-            {
-                return;
-            }
-            // For locked inventory items, allow only "examine" and "drop" actions.
-            if (unlockedItemsManager != null && !unlockedItemsManager.isUnlocked(canonicalId))
-            {
-                if (!option.equals("examine") && !option.equals("drop"))
-                {
-                    event.consume();
-                }
-            }
+            return;
         }
+
+        // 3. Handle direct inventory actions (including ground items).
+        InventoryActionHandler.handleInventoryAction(itemManager, unlockedItemsManager, event, this);
     }
 
-    private boolean isNormalWorld()
+    public boolean isNormalWorld()
     {
         EnumSet<WorldType> worldTypes = client.getWorldType();
         return !(worldTypes.contains(WorldType.DEADMAN)
@@ -405,17 +343,16 @@ public class ChanceManPlugin extends Plugin
                 || worldTypes.contains(WorldType.PVP));
     }
 
-    private boolean isTradeable(int itemId)
+    public boolean isTradeable(int itemId)
     {
         ItemComposition comp = itemManager.getItemComposition(itemId);
         return comp != null && comp.isTradeable();
     }
 
-    private boolean isNotTracked(int itemId)
+    public boolean isNotTracked(int itemId)
     {
-     return
-     itemId == 995 || itemId == 13191 || itemId == 13190 || //Coins and Bonds
-     itemId == 7588 || itemId == 1589 || itemId == 7590 || itemId == 7591; //Coffin from leo random
+        return itemId == 995 || itemId == 13191 || itemId == 13190 ||
+                itemId == 7588 || itemId == 1589 || itemId == 7590 || itemId == 7591;
     }
 
     public String getItemName(int itemId)

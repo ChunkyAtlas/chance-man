@@ -1,0 +1,1719 @@
+[
+  {
+    "spellId": 0,
+    "name": "Home Teleport",
+    "runes": {}
+  },
+  {
+    "spellId": 1,
+    "name": "Wind Strike",
+    "runes": {
+      "mind rune": 1,
+      "air rune": 1
+    }
+  },
+  {
+    "spellId": 3,
+    "name": "Confuse",
+    "runes": {
+      "body rune": 1,
+      "earth rune": 2,
+      "water rune": 3
+    }
+  },
+  {
+    "spellId": 3,
+    "name": "Reanimate Goblin",
+    "runes": {
+      "nature rune": 1,
+      "body rune": 2
+    }
+  },
+  {
+    "spellId": 4,
+    "name": "Enchant Crossbow Bolt (Opal)",
+    "runes": {
+      "cosmic rune": 1,
+      "air rune": 2
+    }
+  },
+  {
+    "spellId": 5,
+    "name": "Water Strike",
+    "runes": {
+      "mind rune": 1,
+      "water rune": 1,
+      "air rune": 1
+    }
+  },
+  {
+    "spellId": 6,
+    "name": "Lumbridge Graveyard Teleport",
+    "runes": {
+      "law rune": 1,
+      "earth rune": 2
+    }
+  },
+  {
+    "spellId": 7,
+    "name": "Lvl-1 Enchant",
+    "runes": {
+      "cosmic rune": 1,
+      "water rune": 1
+    }
+  },
+  {
+    "spellId": 7,
+    "name": "Enchant Crossbow Bolt (Sapphire)",
+    "runes": {
+      "cosmic rune": 1,
+      "mind rune": 1,
+      "water rune": 1
+    }
+  },
+  {
+    "spellId": 7,
+    "name": "Reanimate Monkey",
+    "runes": {
+      "nature rune": 1,
+      "body rune": 3
+    }
+  },
+  {
+    "spellId": 9,
+    "name": "Earth Strike",
+    "runes": {
+      "mind rune": 1,
+      "earth rune": 2,
+      "air rune": 1
+    }
+  },
+  {
+    "spellId": 11,
+    "name": "Weaken",
+    "runes": {
+      "body rune": 1,
+      "earth rune": 2,
+      "water rune": 3
+    }
+  },
+  {
+    "spellId": 12,
+    "name": "Reanimate Imp",
+    "runes": {
+      "nature rune": 2,
+      "body rune": 3
+    }
+  },
+  {
+    "spellId": 13,
+    "name": "Fire Strike",
+    "runes": {
+      "mind rune": 1,
+      "fire rune": 3,
+      "air rune": 2
+    }
+  },
+  {
+    "spellId": 14,
+    "name": "Enchant Crossbow Bolt (Jade)",
+    "runes": {
+      "cosmic rune": 1,
+      "earth rune": 2
+    }
+  },
+  {
+    "spellId": 15,
+    "name": "Bones to Bananas",
+    "runes": {
+      "nature rune": 1,
+      "earth rune": 2,
+      "water rune": 2
+    }
+  },
+  {
+    "spellId": 16,
+    "name": "Reanimate Minotaur",
+    "runes": {
+      "nature rune": 2,
+      "body rune": 4
+    }
+  },
+  {
+    "spellId": 17,
+    "name": "Wind Bolt",
+    "runes": {
+      "chaos rune": 1,
+      "air rune": 2
+    }
+  },
+  {
+    "spellId": 17,
+    "name": "Draynor Manor Teleport",
+    "runes": {
+      "law rune": 1,
+      "earth rune": 1,
+      "water rune": 1
+    }
+  },
+  {
+    "spellId": 19,
+    "name": "Curse",
+    "runes": {
+      "body rune": 1,
+      "earth rune": 3,
+      "water rune": 2
+    }
+  },
+  {
+    "spellId": 19,
+    "name": "Reanimate Scorpion",
+    "runes": {
+      "soul rune": 1,
+      "nature rune": 1
+    }
+  },
+  {
+    "spellId": 20,
+    "name": "Bind",
+    "runes": {
+      "nature rune": 2,
+      "earth rune": 3,
+      "water rune": 3
+    }
+  },
+  {
+    "spellId": 21,
+    "name": "Low Level Alchemy",
+    "runes": {
+      "nature rune": 1,
+      "fire rune": 3
+    }
+  },
+  {
+    "spellId": 21,
+    "name": "Reanimate Bear",
+    "runes": {
+      "soul rune": 1,
+      "nature rune": 1,
+      "body rune": 1
+    }
+  },
+  {
+    "spellId": 22,
+    "name": "Reanimate Unicorn",
+    "runes": {
+      "soul rune": 1,
+      "nature rune": 1,
+      "body rune": 2
+    }
+  },
+  {
+    "spellId": 23,
+    "name": "Water Bolt",
+    "runes": {
+      "chaos rune": 1,
+      "water rune": 2,
+      "air rune": 2
+    }
+  },
+  {
+    "spellId": 24,
+    "name": "Enchant Crossbow Bolt (Pearl)",
+    "runes": {
+      "cosmic rune": 1,
+      "water rune": 2
+    }
+  },
+  {
+    "spellId": 25,
+    "name": "Varrock Teleport",
+    "runes": {
+      "law rune": 1,
+      "fire rune": 1,
+      "air rune": 3
+    }
+  },
+  {
+    "spellId": 26,
+    "name": "Reanimate Dog",
+    "runes": {
+      "soul rune": 1,
+      "nature rune": 2,
+      "body rune": 2
+    }
+  },
+  {
+    "spellId": 27,
+    "name": "Lvl-2 Enchant",
+    "runes": {
+      "cosmic rune": 1,
+      "air rune": 3
+    }
+  },
+  {
+    "spellId": 27,
+    "name": "Enchant Crossbow Bolt (Emerald)",
+    "runes": {
+      "nature rune": 1,
+      "cosmic rune": 3,
+      "air rune": 10
+    }
+  },
+  {
+    "spellId": 28,
+    "name": "Mind Altar Teleport",
+    "runes": {
+      "law rune": 1,
+      "mind rune": 2
+    }
+  },
+  {
+    "spellId": 29,
+    "name": "Earth Bolt",
+    "runes": {
+      "chaos rune": 1,
+      "earth rune": 3,
+      "air rune": 2
+    }
+  },
+  {
+    "spellId": 29,
+    "name": "Enchant Crossbow Bolt (Red Topaz)",
+    "runes": {
+      "cosmic rune": 1,
+      "fire rune": 2
+    }
+  },
+  {
+    "spellId": 30,
+    "name": "Reanimate Chaos Druid",
+    "runes": {
+      "soul rune": 1,
+      "nature rune": 2,
+      "body rune": 3
+    }
+  },
+  {
+    "spellId": 31,
+    "name": "Lumbridge Teleport",
+    "runes": {
+      "law rune": 1,
+      "earth rune": 1,
+      "air rune": 3
+    }
+  },
+  {
+    "spellId": 33,
+    "name": "Telekinetic Grab",
+    "runes": {
+      "law rune": 1,
+      "air rune": 1
+    }
+  },
+  {
+    "spellId": 34,
+    "name": "Respawn Teleport",
+    "runes": {
+      "soul rune": 1,
+      "law rune": 1
+    }
+  },
+  {
+    "spellId": 35,
+    "name": "Fire Bolt",
+    "runes": {
+      "chaos rune": 1,
+      "fire rune": 4,
+      "air rune": 3
+    }
+  },
+  {
+    "spellId": 37,
+    "name": "Falador Teleport",
+    "runes": {
+      "law rune": 1,
+      "water rune": 1,
+      "air rune": 3
+    }
+  },
+  {
+    "spellId": 37,
+    "name": "Reanimate Giant",
+    "runes": {
+      "soul rune": 1,
+      "nature rune": 2,
+      "body rune": 4
+    }
+  },
+  {
+    "spellId": 39,
+    "name": "Crumble Undead",
+    "runes": {
+      "chaos rune": 1,
+      "earth rune": 2,
+      "air rune": 2
+    }
+  },
+  {
+    "spellId": 40,
+    "name": "Teleport to House",
+    "runes": {
+      "law rune": 1,
+      "earth rune": 1,
+      "air rune": 1
+    }
+  },
+  {
+    "spellId": 40,
+    "name": "Reanimate Ogre",
+    "runes": {
+      "soul rune": 1,
+      "nature rune": 3,
+      "body rune": 4
+    }
+  },
+  {
+    "spellId": 40,
+    "name": "Salve Graveyard Teleport",
+    "runes": {
+      "soul rune": 2,
+      "law rune": 1
+    }
+  },
+  {
+    "spellId": 41,
+    "name": "Wind Blast",
+    "runes": {
+      "death rune": 1,
+      "air rune": 3
+    }
+  },
+  {
+    "spellId": 43,
+    "name": "Superheat Item",
+    "runes": {
+      "nature rune": 1,
+      "fire rune": 4
+    }
+  },
+  {
+    "spellId": 43,
+    "name": "Reanimate Elf",
+    "runes": {
+      "soul rune": 2,
+      "nature rune": 2,
+      "body rune": 2
+    }
+  },
+  {
+    "spellId": 45,
+    "name": "Camelot Teleport",
+    "runes": {
+      "law rune": 1,
+      "air rune": 5
+    }
+  },
+  {
+    "spellId": 46,
+    "name": "Reanimate Troll",
+    "runes": {
+      "soul rune": 2,
+      "nature rune": 2,
+      "body rune": 3
+    }
+  },
+  {
+    "spellId": 47,
+    "name": "Water Blast",
+    "runes": {
+      "death rune": 1,
+      "water rune": 3,
+      "air rune": 3
+    }
+  },
+  {
+    "spellId": 48,
+    "name": "Fenkenstrain's Castle Teleport",
+    "runes": {
+      "soul rune": 1,
+      "law rune": 1,
+      "earth rune": 1
+    }
+  },
+  {
+    "spellId": 49,
+    "name": "Lvl-3 Enchant",
+    "runes": {
+      "cosmic rune": 1,
+      "fire rune": 5
+    }
+  },
+  {
+    "spellId": 49,
+    "name": "Enchant Crossbow Bolt (Ruby)",
+    "runes": {
+      "blood rune": 1,
+      "cosmic rune": 5,
+      "fire rune": 10
+    }
+  },
+  {
+    "spellId": 50,
+    "name": "Iban Blast",
+    "runes": {
+      "death rune": 1,
+      "fire rune": 5
+    }
+  },
+  {
+    "spellId": 50,
+    "name": "Magic Dart",
+    "runes": {
+      "death rune": 1,
+      "mind rune": 4
+    }
+  },
+  {
+    "spellId": 50,
+    "name": "Smoke Rush",
+    "runes": {
+      "death rune": 2,
+      "chaos rune": 2,
+      "fire rune": 1,
+      "air rune": 1
+    }
+  },
+  {
+    "spellId": 50,
+    "name": "Snare",
+    "runes": {
+      "nature rune": 3,
+      "earth rune": 4,
+      "water rune": 4
+    }
+  },
+  {
+    "spellId": 51,
+    "name": "Ardougne Teleport",
+    "runes": {
+      "law rune": 2,
+      "water rune": 2
+    }
+  },
+  {
+    "spellId": 52,
+    "name": "Shadow Rush",
+    "runes": {
+      "soul rune": 1,
+      "death rune": 2,
+      "chaos rune": 2,
+      "air rune": 1
+    }
+  },
+  {
+    "spellId": 52,
+    "name": "Reanimate Horror",
+    "runes": {
+      "soul rune": 2,
+      "nature rune": 2,
+      "body rune": 4
+    }
+  },
+  {
+    "spellId": 53,
+    "name": "Earth Blast",
+    "runes": {
+      "death rune": 1,
+      "earth rune": 4,
+      "air rune": 3
+    }
+  },
+  {
+    "spellId": 54,
+    "name": "Paddewwa Teleport",
+    "runes": {
+      "law rune": 2,
+      "fire rune": 1,
+      "air rune": 1
+    }
+  },
+  {
+    "spellId": 55,
+    "name": "High Level Alchemy",
+    "runes": {
+      "nature rune": 1,
+      "fire rune": 5
+    }
+  },
+  {
+    "spellId": 56,
+    "name": "Blood Rush",
+    "runes": {
+      "blood rune": 1,
+      "death rune": 2,
+      "chaos rune": 2
+    }
+  },
+  {
+    "spellId": 56,
+    "name": "Charge Water Orb",
+    "runes": {
+      "cosmic rune": 3,
+      "water rune": 30
+    }
+  },
+  {
+    "spellId": 57,
+    "name": "Lvl-4 Enchant",
+    "runes": {
+      "cosmic rune": 1,
+      "earth rune": 10
+    }
+  },
+  {
+    "spellId": 57,
+    "name": "Enchant Crossbow Bolt (Diamond)",
+    "runes": {
+      "law rune": 2,
+      "cosmic rune": 1,
+      "earth rune": 10
+    }
+  },
+  {
+    "spellId": 57,
+    "name": "Reanimate Kalphite",
+    "runes": {
+      "soul rune": 2,
+      "nature rune": 3,
+      "body rune": 4
+    }
+  },
+  {
+    "spellId": 58,
+    "name": "Ice Rush",
+    "runes": {
+      "death rune": 2,
+      "chaos rune": 2,
+      "water rune": 2
+    }
+  },
+  {
+    "spellId": 58,
+    "name": "Watchtower Teleport",
+    "runes": {
+      "law rune": 2,
+      "earth rune": 2
+    }
+  },
+  {
+    "spellId": 59,
+    "name": "Fire Blast",
+    "runes": {
+      "death rune": 1,
+      "fire rune": 5,
+      "air rune": 4
+    }
+  },
+  {
+    "spellId": 60,
+    "name": "Bones to Peaches",
+    "runes": {
+      "nature rune": 2,
+      "earth rune": 2,
+      "water rune": 4
+    }
+  },
+  {
+    "spellId": 60,
+    "name": "Charge Earth Orb",
+    "runes": {
+      "cosmic rune": 3,
+      "earth rune": 30
+    }
+  },
+  {
+    "spellId": 60,
+    "name": "Saradomin Strike",
+    "runes": {
+      "blood rune": 2,
+      "fire rune": 2,
+      "air rune": 4
+    }
+  },
+  {
+    "spellId": 60,
+    "name": "Flames of Zamorak",
+    "runes": {
+      "blood rune": 2,
+      "fire rune": 4,
+      "air rune": 1
+    }
+  },
+  {
+    "spellId": 60,
+    "name": "Claws of Guthix",
+    "runes": {
+      "blood rune": 2,
+      "fire rune": 1,
+      "air rune": 4
+    }
+  },
+  {
+    "spellId": 60,
+    "name": "Senntisten Teleport",
+    "runes": {
+      "soul rune": 1,
+      "law rune": 2
+    }
+  },
+  {
+    "spellId": 61,
+    "name": "Trollheim Teleport",
+    "runes": {
+      "law rune": 2,
+      "fire rune": 2
+    }
+  },
+  {
+    "spellId": 61,
+    "name": "West Ardougne Teleport",
+    "runes": {
+      "soul rune": 2,
+      "law rune": 2
+    }
+  },
+  {
+    "spellId": 62,
+    "name": "Smoke Burst",
+    "runes": {
+      "death rune": 2,
+      "chaos rune": 4,
+      "fire rune": 2,
+      "air rune": 2
+    }
+  },
+  {
+    "spellId": 62,
+    "name": "Wind Wave",
+    "runes": {
+      "blood rune": 1,
+      "air rune": 5
+    }
+  },
+  {
+    "spellId": 62,
+    "name": "Reanimate Dagannoth",
+    "runes": {
+      "soul rune": 3,
+      "nature rune": 3,
+      "body rune": 4
+    }
+  },
+  {
+    "spellId": 63,
+    "name": "Charge Fire Orb",
+    "runes": {
+      "cosmic rune": 3,
+      "fire rune": 30
+    }
+  },
+  {
+    "spellId": 64,
+    "name": "Shadow Burst",
+    "runes": {
+      "soul rune": 2,
+      "death rune": 2,
+      "chaos rune": 4,
+      "air rune": 1
+    }
+  },
+  {
+    "spellId": 64,
+    "name": "Teleport to Ape Atoll",
+    "runes": {
+      "law rune": 2,
+      "fire rune": 2,
+      "water rune": 2
+    }
+  },
+  {
+    "spellId": 65,
+    "name": "Bake Pie",
+    "runes": {
+      "astral rune": 1,
+      "fire rune": 5,
+      "water rune": 4
+    }
+  },
+  {
+    "spellId": 65,
+    "name": "Geomancy",
+    "runes": {
+      "nature rune": 3,
+      "astral rune": 3,
+      "earth rune": 8
+    }
+  },
+  {
+    "spellId": 65,
+    "name": "Water Wave",
+    "runes": {
+      "blood rune": 1,
+      "water rune": 7,
+      "air rune": 5
+    }
+  },
+  {
+    "spellId": 65,
+    "name": "Reanimate Bloodveld",
+    "runes": {
+      "soul rune": 2,
+      "blood rune": 1,
+      "nature rune": 2
+    }
+  },
+  {
+    "spellId": 65,
+    "name": "Harmony Island Teleport",
+    "runes": {
+      "soul rune": 1,
+      "law rune": 1,
+      "nature rune": 1
+    }
+  },
+  {
+    "spellId": 66,
+    "name": "Charge Air Orb",
+    "runes": {
+      "cosmic rune": 3,
+      "air rune": 30
+    }
+  },
+  {
+    "spellId": 66,
+    "name": "Cure Plant",
+    "runes": {
+      "astral rune": 1,
+      "earth rune": 8
+    }
+  },
+  {
+    "spellId": 66,
+    "name": "Kharyrll Teleport",
+    "runes": {
+      "blood rune": 1,
+      "law rune": 2
+    }
+  },
+  {
+    "spellId": 66,
+    "name": "Vulnerability",
+    "runes": {
+      "soul rune": 1,
+      "earth rune": 5,
+      "water rune": 5
+    }
+  },
+  {
+    "spellId": 66,
+    "name": "Monster Examine",
+    "runes": {
+      "cosmic rune": 1,
+      "astral rune": 1,
+      "mind rune": 1
+    }
+  },
+  {
+    "spellId": 67,
+    "name": "NPC Contact",
+    "runes": {
+      "cosmic rune": 1,
+      "astral rune": 2,
+      "air rune": 1
+    }
+  },
+  {
+    "spellId": 68,
+    "name": "Blood Burst",
+    "runes": {
+      "blood rune": 2,
+      "death rune": 2,
+      "chaos rune": 4
+    }
+  },
+  {
+    "spellId": 68,
+    "name": "Cure Other",
+    "runes": {
+      "law rune": 1,
+      "astral rune": 1,
+      "earth rune": 10
+    }
+  },
+  {
+    "spellId": 68,
+    "name": "Lvl-5 Enchant",
+    "runes": {
+      "cosmic rune": 1,
+      "earth rune": 15,
+      "water rune": 15
+    }
+  },
+  {
+    "spellId": 68,
+    "name": "Enchant Crossbow Bolt (Dragonstone)",
+    "runes": {
+      "soul rune": 1,
+      "cosmic rune": 15,
+      "earth rune": 10
+    }
+  },
+  {
+    "spellId": 68,
+    "name": "Humidify",
+    "runes": {
+      "astral rune": 1,
+      "fire rune": 3,
+      "water rune": 1
+    }
+  },
+  {
+    "spellId": 69,
+    "name": "Teleport to Kourend",
+    "runes": {
+      "soul rune": 2,
+      "law rune": 2,
+      "fire rune": 5,
+      "water rune": 4
+    }
+  },
+  {
+    "spellId": 69,
+    "name": "Moonclan Teleport",
+    "runes": {
+      "law rune": 1,
+      "astral rune": 2,
+      "earth rune": 2
+    }
+  },
+  {
+    "spellId": 69,
+    "name": "Reanimate TzHaar",
+    "runes": {
+      "soul rune": 2,
+      "blood rune": 1,
+      "nature rune": 3
+    }
+  },
+  {
+    "spellId": 70,
+    "name": "Earth Wave",
+    "runes": {
+      "blood rune": 1,
+      "earth rune": 7,
+      "air rune": 5
+    }
+  },
+  {
+    "spellId": 70,
+    "name": "Ice Burst",
+    "runes": {
+      "death rune": 2,
+      "chaos rune": 4,
+      "water rune": 4
+    }
+  },
+  {
+    "spellId": 70,
+    "name": "Tele Group Moonclan",
+    "runes": {
+      "law rune": 1,
+      "astral rune": 2,
+      "earth rune": 4
+    }
+  },
+  {
+    "spellId": 71,
+    "name": "Cure Me",
+    "runes": {
+      "law rune": 1,
+      "cosmic rune": 2,
+      "astral rune": 2
+    }
+  },
+  {
+    "spellId": 71,
+    "name": "Hunter Kit",
+    "runes": {
+      "astral rune": 2,
+      "earth rune": 2
+    }
+  },
+  {
+    "spellId": 71,
+    "name": "Cemetery Teleport",
+    "runes": {
+      "soul rune": 1,
+      "blood rune": 1,
+      "law rune": 1
+    }
+  },
+  {
+    "spellId": 72,
+    "name": "Lassar Teleport",
+    "runes": {
+      "law rune": 2,
+      "water rune": 4
+    }
+  },
+  {
+    "spellId": 72,
+    "name": "Waterbirth Teleport",
+    "runes": {
+      "law rune": 1,
+      "astral rune": 2,
+      "water rune": 1
+    }
+  },
+  {
+    "spellId": 72,
+    "name": "Reanimate Demon",
+    "runes": {
+      "soul rune": 2,
+      "blood rune": 1,
+      "nature rune": 4
+    }
+  },
+  {
+    "spellId": 73,
+    "name": "Enfeeble",
+    "runes": {
+      "soul rune": 1,
+      "earth rune": 8,
+      "water rune": 8
+    }
+  },
+  {
+    "spellId": 73,
+    "name": "Tele Group Waterbirth",
+    "runes": {
+      "law rune": 1,
+      "astral rune": 2,
+      "water rune": 5
+    }
+  },
+  {
+    "spellId": 74,
+    "name": "Cure Group",
+    "runes": {
+      "law rune": 2,
+      "cosmic rune": 2,
+      "astral rune": 2
+    }
+  },
+  {
+    "spellId": 74,
+    "name": "Smoke Blitz",
+    "runes": {
+      "blood rune": 2,
+      "death rune": 2,
+      "fire rune": 2,
+      "air rune": 2
+    }
+  },
+  {
+    "spellId": 74,
+    "name": "Teleother Lumbridge",
+    "runes": {
+      "soul rune": 1,
+      "law rune": 1,
+      "earth rune": 1
+    }
+  },
+  {
+    "spellId": 75,
+    "name": "Barbarian Teleport",
+    "runes": {
+      "law rune": 2,
+      "astral rune": 2,
+      "fire rune": 3
+    }
+  },
+  {
+    "spellId": 75,
+    "name": "Fire Wave",
+    "runes": {
+      "blood rune": 1,
+      "fire rune": 7,
+      "air rune": 5
+    }
+  },
+  {
+    "spellId": 75,
+    "name": "Stat Spy",
+    "runes": {
+      "cosmic rune": 1,
+      "astral rune": 2,
+      "body rune": 5
+    }
+  },
+  {
+    "spellId": 76,
+    "name": "Spin Flax",
+    "runes": {
+      "nature rune": 2,
+      "astral rune": 1,
+      "air rune": 5
+    }
+  },
+  {
+    "spellId": 76,
+    "name": "Tele Group Barbarian",
+    "runes": {
+      "law rune": 2,
+      "astral rune": 2,
+      "fire rune": 6
+    }
+  },
+  {
+    "spellId": 76,
+    "name": "Shadow Blitz",
+    "runes": {
+      "soul rune": 2,
+      "death rune": 2,
+      "chaos rune": 2,
+      "air rune": 2
+    }
+  },
+  {
+    "spellId": 77,
+    "name": "Superglass Make",
+    "runes": {
+      "astral rune": 2,
+      "fire rune": 6,
+      "air rune": 10
+    }
+  },
+  {
+    "spellId": 78,
+    "name": "Dareeyak Teleport",
+    "runes": {
+      "law rune": 2,
+      "fire rune": 3,
+      "air rune": 2
+    }
+  },
+  {
+    "spellId": 78,
+    "name": "Khazard Teleport",
+    "runes": {
+      "law rune": 2,
+      "astral rune": 2,
+      "water rune": 4
+    }
+  },
+  {
+    "spellId": 78,
+    "name": "Tan Leather",
+    "runes": {
+      "nature rune": 1,
+      "astral rune": 2,
+      "fire rune": 5
+    }
+  },
+  {
+    "spellId": 78,
+    "name": "Resurrect Crops",
+    "runes": {
+      "soul rune": 8,
+      "blood rune": 8,
+      "nature rune": 12,
+      "earth rune": 25
+    }
+  },
+  {
+    "spellId": 78,
+    "name": "Reanimate Aviansie",
+    "runes": {
+      "soul rune": 3,
+      "blood rune": 1,
+      "nature rune": 4
+    }
+  },
+  {
+    "spellId": 79,
+    "name": "Entangle",
+    "runes": {
+      "nature rune": 4,
+      "earth rune": 5,
+      "water rune": 5
+    }
+  },
+  {
+    "spellId": 79,
+    "name": "Tele Group Khazard",
+    "runes": {
+      "law rune": 2,
+      "astral rune": 2,
+      "water rune": 8
+    }
+  },
+  {
+    "spellId": 79,
+    "name": "Dream",
+    "runes": {
+      "cosmic rune": 1,
+      "astral rune": 2,
+      "body rune": 5
+    }
+  },
+  {
+    "spellId": 80,
+    "name": "Blood Blitz",
+    "runes": {
+      "blood rune": 4,
+      "death rune": 2
+    }
+  },
+  {
+    "spellId": 80,
+    "name": "Stun",
+    "runes": {
+      "soul rune": 1,
+      "earth rune": 12,
+      "water rune": 12
+    }
+  },
+  {
+    "spellId": 80,
+    "name": "String Jewellery",
+    "runes": {
+      "astral rune": 2,
+      "earth rune": 10,
+      "water rune": 5
+    }
+  },
+  {
+    "spellId": 80,
+    "name": "Charge",
+    "runes": {
+      "blood rune": 3,
+      "fire rune": 3,
+      "air rune": 3
+    }
+  },
+  {
+    "spellId": 81,
+    "name": "Stat Restore Pot Share",
+    "runes": {
+      "astral rune": 2,
+      "earth rune": 10,
+      "water rune": 10
+    }
+  },
+  {
+    "spellId": 81,
+    "name": "Wind Surge",
+    "runes": {
+      "wrath rune": 1,
+      "air rune": 7
+    }
+  },
+  {
+    "spellId": 82,
+    "name": "Ice Blitz",
+    "runes": {
+      "blood rune": 2,
+      "death rune": 2,
+      "water rune": 3
+    }
+  },
+  {
+    "spellId": 82,
+    "name": "Magic Imbue",
+    "runes": {
+      "astral rune": 2,
+      "fire rune": 7,
+      "water rune": 7
+    }
+  },
+  {
+    "spellId": 82,
+    "name": "Teleother Falador",
+    "runes": {
+      "soul rune": 1,
+      "law rune": 1,
+      "water rune": 1
+    }
+  },
+  {
+    "spellId": 83,
+    "name": "Fertile Soil",
+    "runes": {
+      "nature rune": 2,
+      "astral rune": 3,
+      "earth rune": 15
+    }
+  },
+  {
+    "spellId": 83,
+    "name": "Barrows Teleport",
+    "runes": {
+      "soul rune": 2,
+      "blood rune": 1,
+      "law rune": 2
+    }
+  },
+  {
+    "spellId": 84,
+    "name": "Boost Potion Share",
+    "runes": {
+      "astral rune": 3,
+      "earth rune": 10,
+      "water rune": 12
+    }
+  },
+  {
+    "spellId": 84,
+    "name": "Carrallangar Teleport",
+    "runes": {
+      "soul rune": 2,
+      "law rune": 2
+    }
+  },
+  {
+    "spellId": 85,
+    "name": "Tele Block",
+    "runes": {
+      "law rune": 1,
+      "death rune": 1,
+      "chaos rune": 1
+    }
+  },
+  {
+    "spellId": 85,
+    "name": "Teleport to Bounty Target",
+    "runes": {
+      "law rune": 1,
+      "death rune": 1,
+      "chaos rune": 1
+    }
+  },
+  {
+    "spellId": 85,
+    "name": "Water Surge",
+    "runes": {
+      "wrath rune": 1,
+      "water rune": 10,
+      "air rune": 7
+    }
+  },
+  {
+    "spellId": 85,
+    "name": "Fishing Guild Teleport",
+    "runes": {
+      "law rune": 3,
+      "astral rune": 3,
+      "water rune": 10
+    }
+  },
+  {
+    "spellId": 85,
+    "name": "Reanimate Abyssal Creature",
+    "runes": {
+      "soul rune": 4,
+      "blood rune": 1,
+      "nature rune": 4
+    }
+  },
+  {
+    "spellId": 86,
+    "name": "Smoke Barrage",
+    "runes": {
+      "blood rune": 2,
+      "death rune": 4,
+      "fire rune": 5,
+      "air rune": 5
+    }
+  },
+  {
+    "spellId": 86,
+    "name": "Tele Group Fishing Guild",
+    "runes": {
+      "law rune": 3,
+      "astral rune": 3,
+      "water rune": 14
+    }
+  },
+  {
+    "spellId": 86,
+    "name": "Plank Make",
+    "runes": {
+      "nature rune": 1,
+      "astral rune": 2,
+      "earth rune": 15
+    }
+  },
+  {
+    "spellId": 87,
+    "name": "Catherby Teleport",
+    "runes": {
+      "law rune": 3,
+      "astral rune": 3,
+      "water rune": 10
+    }
+  },
+  {
+    "spellId": 87,
+    "name": "Lvl-6 Enchant",
+    "runes": {
+      "cosmic rune": 1,
+      "fire rune": 20,
+      "earth rune": 20
+    }
+  },
+  {
+    "spellId": 87,
+    "name": "Enchant Crossbow Bolt (Onyx)",
+    "runes": {
+      "death rune": 1,
+      "cosmic rune": 20,
+      "fire rune": 10
+    }
+  },
+  {
+    "spellId": 88,
+    "name": "Shadow Barrage",
+    "runes": {
+      "soul rune": 3,
+      "blood rune": 2,
+      "death rune": 4,
+      "air rune": 4
+    }
+  },
+  {
+    "spellId": 88,
+    "name": "Tele Group Catherby",
+    "runes": {
+      "law rune": 3,
+      "astral rune": 3,
+      "water rune": 15
+    }
+  },
+  {
+    "spellId": 89,
+    "name": "Ice Plateau Teleport",
+    "runes": {
+      "law rune": 3,
+      "astral rune": 3,
+      "water rune": 8
+    }
+  },
+  {
+    "spellId": 89,
+    "name": "Recharge Dragonstone",
+    "runes": {
+      "soul rune": 1,
+      "astral rune": 1,
+      "water rune": 4
+    }
+  },
+  {
+    "spellId": 90,
+    "name": "Annakarl Teleport",
+    "runes": {
+      "blood rune": 2,
+      "law rune": 2
+    }
+  },
+  {
+    "spellId": 90,
+    "name": "Teleother Camelot",
+    "runes": {
+      "soul rune": 2,
+      "law rune": 1
+    }
+  },
+  {
+    "spellId": 90,
+    "name": "Tele Group Ice Plateau",
+    "runes": {
+      "law rune": 3,
+      "astral rune": 3,
+      "water rune": 16
+    }
+  },
+  {
+    "spellId": 90,
+    "name": "Earth Surge",
+    "runes": {
+      "wrath rune": 1,
+      "earth rune": 10,
+      "air rune": 7
+    }
+  },
+  {
+    "spellId": 90,
+    "name": "Ape Atoll Teleport",
+    "runes": {
+      "soul rune": 2,
+      "blood rune": 2,
+      "law rune": 2
+    }
+  },
+  {
+    "spellId": 91,
+    "name": "Energy Transfer",
+    "runes": {
+      "law rune": 2,
+      "nature rune": 1,
+      "astral rune": 3
+    }
+  },
+  {
+    "spellId": 92,
+    "name": "Blood Barrage",
+    "runes": {
+      "soul rune": 1,
+      "blood rune": 4,
+      "death rune": 4
+    }
+  },
+  {
+    "spellId": 92,
+    "name": "Heal Other",
+    "runes": {
+      "blood rune": 1,
+      "law rune": 3,
+      "astral rune": 3
+    }
+  },
+  {
+    "spellId": 93,
+    "name": "Lvl-7 Enchant",
+    "runes": {
+      "soul rune": 20,
+      "blood rune": 20,
+      "cosmic rune": 1
+    }
+  },
+  {
+    "spellId": 93,
+    "name": "Vengeance Other",
+    "runes": {
+      "death rune": 2,
+      "astral rune": 3,
+      "earth rune": 10
+    }
+  },
+  {
+    "spellId": 93,
+    "name": "Reanimate Dragon",
+    "runes": {
+      "soul rune": 4,
+      "blood rune": 2,
+      "nature rune": 4
+    }
+  },
+  {
+    "spellId": 94,
+    "name": "Ice Barrage",
+    "runes": {
+      "blood rune": 2,
+      "death rune": 4,
+      "water rune": 6
+    }
+  },
+  {
+    "spellId": 94,
+    "name": "Vengeance",
+    "runes": {
+      "death rune": 2,
+      "astral rune": 4,
+      "earth rune": 10
+    }
+  },
+  {
+    "spellId": 95,
+    "name": "Heal Group",
+    "runes": {
+      "blood rune": 3,
+      "law rune": 6,
+      "astral rune": 4
+    }
+  },
+  {
+    "spellId": 95,
+    "name": "Fire Surge",
+    "runes": {
+      "wrath rune": 1,
+      "fire rune": 10,
+      "air rune": 7
+    }
+  },
+  {
+    "spellId": 96,
+    "name": "Ghorrock Teleport",
+    "runes": {
+      "law rune": 2,
+      "water rune": 8
+    }
+  },
+  {
+    "spellId": 96,
+    "name": "Spellbook Swap",
+    "runes": {
+      "law rune": 1,
+      "cosmic rune": 2,
+      "astral rune": 3
+    }
+  },
+  {
+    "spellId": 452,
+    "name": "Inferior Demonbane",
+    "runes": {
+      "fire rune": 4,
+      "chaos rune": 1
+    }
+  },
+  {
+    "spellId": 453,
+    "name": "Superior Demonbane",
+    "runes": {
+      "fire rune": 8,
+      "soul rune": 1
+    }
+  },
+  {
+    "spellId": 454,
+    "name": "Dark Demonbane",
+    "runes": {
+      "fire rune": 12,
+      "soul rune": 2
+    }
+  },
+  {
+    "spellId": 455,
+    "name": "Mark of Darkness",
+    "runes": {
+      "cosmic rune": 1,
+      "soul rune": 1
+    }
+  },
+  {
+    "spellId": 456,
+    "name": "Lesser Corruption",
+    "runes": {
+      "death rune": 1,
+      "soul rune": 2
+    }
+  },
+  {
+    "spellId": 457,
+    "name": "Ward of Arceuus",
+    "runes": {
+      "cosmic rune": 1,
+      "nature rune": 2,
+      "soul rune": 4
+    }
+  },
+  {
+    "spellId": 458,
+    "name": "Greater Corruption",
+    "runes": {
+      "blood rune": 1,
+      "soul rune": 3
+    }
+  },
+  {
+    "spellId": 459,
+    "name": "Resurrect Lesser Ghost",
+    "runes": {
+      "air rune": 10,
+      "cosmic rune": 1,
+      "mind rune": 5
+    }
+  },
+  {
+    "spellId": 460,
+    "name": "Resurrect Lesser Skeleton",
+    "runes": {
+      "air rune": 10,
+      "cosmic rune": 1,
+      "mind rune": 5
+    }
+  },
+  {
+    "spellId": 461,
+    "name": "Resurrect Lesser Zombie",
+    "runes": {
+      "air rune": 10,
+      "cosmic rune": 1,
+      "mind rune": 5
+    }
+  },
+  {
+    "spellId": 462,
+    "name": "Resurrect Superior Ghost",
+    "runes": {
+      "earth rune": 10,
+      "cosmic rune": 1,
+      "death rune": 5
+    }
+  },
+  {
+    "spellId": 463,
+    "name": "Resurrect Superior Skeleton",
+    "runes": {
+      "earth rune": 10,
+      "cosmic rune": 1,
+      "death rune": 5
+    }
+  },
+  {
+    "spellId": 464,
+    "name": "Resurrect Superior Zombie",
+    "runes": {
+      "earth rune": 10,
+      "cosmic rune": 1,
+      "death rune": 5
+    }
+  },
+  {
+    "spellId": 465,
+    "name": "Resurrect Greater Ghost",
+    "runes": {
+      "fire rune": 10,
+      "cosmic rune": 1,
+      "blood rune": 5
+    }
+  },
+  {
+    "spellId": 466,
+    "name": "Resurrect Greater Skeleton",
+    "runes": {
+      "fire rune": 10,
+      "cosmic rune": 1,
+      "blood rune": 5
+    }
+  },
+  {
+    "spellId": 467,
+    "name": "Resurrect Greater Zombie",
+    "runes": {
+      "fire rune": 10,
+      "cosmic rune": 1,
+      "blood rune": 5
+    }
+  },
+  {
+    "spellId": 468,
+    "name": "Shadow Veil",
+    "runes": {
+      "earth rune": 5,
+      "fire rune": 5,
+      "cosmic rune": 5
+    }
+  }
+]
