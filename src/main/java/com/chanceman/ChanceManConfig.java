@@ -13,15 +13,33 @@ public interface ChanceManConfig extends Config
             description = "Only allow free-to-play items"
     )
     @ConfigItem(
-            keyName = "gudiRuleSet",
-            name = "Gudi Rule Set",
-            description = "Blocks more items (Flatpacks and Sets and Poisoned weapons are locked until equivalent weapon poison and base weapon is unlocked)"
+            keyName = "noFlatpacks",
+            name = "No Flatpacks",
+            description = "Blocks flatpacks from being rollable"
+    )
+    @ConfigItem(
+            keyName = "noSets",
+            name = "No Armour Sets",
+            description = "Blocks armour sets from being rollable"
+    )
+    @ConfigItem(
+            keyName = "NoPoisoned",
+            name = "No Poisoned Weapons",
+            description = "Blocks poisoned weapons from being rollable"
     )
     default boolean freeToPlay()
     {
         return false;
     }
-    default boolean gudiRuleSet()
+    default boolean noFlatpacks()
+    {
+        return false;
+    }
+    default boolean noSets()
+    {
+        return false;
+    }
+    default boolean noPoisoned()
     {
         return false;
     }
