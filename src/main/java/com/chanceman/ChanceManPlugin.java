@@ -122,7 +122,7 @@ public class ChanceManPlugin extends Plugin
      * Runs on the client thread. Iterates through item IDs 0–29999 and adds an item to allTradeableItems if:
      * - The item is tradeable and is not blocked by ItemsFilter.
      * - If the "freeToPlay" option is enabled, members-only items are skipped.
-     * - If the "gudiRuleSet" option is enabled, it blocks those items as well from being rollable
+     * - If the "noFlatpacks", "noSets" or "noPoisoned" option is enabled, it blocks those items as well from being rollable
      * If the chanceManPanel is initialized, the panel is updated to reflect the refreshed list.
      */
     private void refreshTradeableItems()
@@ -156,14 +156,14 @@ public class ChanceManPlugin extends Plugin
     /**
      * Listens for configuration changes
      * When the "freeToPlay" option changes, it refreshes the list of tradeable items.
-     * When the GudiSet option changes, it refreshes tradeable items.
+     * When the flatpack, sets or poisoned option changes, it refreshes tradeable items.
      */
     @Subscribe
     public void onConfigChanged(net.runelite.client.events.ConfigChanged event) {
         if (!event.getGroup().equals("chanceman")) {
             return;
         }
-        if (event.getKey().equals("freeToPlay") || event.getKey().equals("gudiRuleSet")) {
+        if (event.getKey().equals("freeToPlay") || event.getKey().equals("noFlatpacks") || event.getKey().equals("noSets") || event.getKey().equals("NoPoisoned")) {
             refreshTradeableItems();
         }
     }
