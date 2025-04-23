@@ -7,7 +7,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-public enum FreeToPlayTradeOnlyItems {
+public enum FreeToPlayBlockedItems {
 
     // Random
     Charcoal(ItemID.CHARCOAL),
@@ -339,13 +339,13 @@ public enum FreeToPlayTradeOnlyItems {
     private static final Set<Integer> ids;
     static {
         Set<Integer> idsBuilder = new HashSet<>();
-        for (FreeToPlayTradeOnlyItems as : FreeToPlayTradeOnlyItems.values()) {
+        for (FreeToPlayBlockedItems as : FreeToPlayBlockedItems.values()) {
             idsBuilder.add(as.getId());
         }
         ids = Collections.unmodifiableSet(idsBuilder);
     }
 
-    FreeToPlayTradeOnlyItems(int id) {
+    FreeToPlayBlockedItems(int id) {
         this.id = id;
     }
 

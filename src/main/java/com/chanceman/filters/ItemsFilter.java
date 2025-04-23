@@ -29,7 +29,7 @@ public class ItemsFilter {
 
     private static boolean isBlockedOnFreeToPlay(int itemId, ChanceManConfig config) {
         return !config.enableFreeToPlayTradeOnlyItems() &&
-                FreeToPlayTradeOnlyItems.isFreeToPlayTradeOnlyItem(itemId);
+                FreeToPlayBlockedItems.isFreeToPlayTradeOnlyItem(itemId);
     }
 
     /**
