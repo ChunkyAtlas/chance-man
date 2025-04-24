@@ -204,4 +204,9 @@ public class RolledItemsManager
     {
         return Collections.unmodifiableSet(rolledItems);
     }
+
+    /**
+     * @return The number of rolled items
+     */
+    public int getRollCount() { return rolledItems.size(); }
 }

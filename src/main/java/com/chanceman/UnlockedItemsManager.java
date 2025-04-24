@@ -185,4 +185,9 @@ public class UnlockedItemsManager
     {
         return Collections.unmodifiableSet(unlockedItems);
     }
+
+    /**
+     * @return The number of unlocked items
+     */
+    public int getUnlockCount() { return unlockedItems.size(); }
 }

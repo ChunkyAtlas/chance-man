@@ -6,6 +6,7 @@ import com.chanceman.account.AccountManager;
 import com.chanceman.filters.EnsouledHeadMapping;
 import com.chanceman.menus.ActionHandler;
 import com.chanceman.filters.ItemsFilter;
+import com.chanceman.ui.clog.CLog;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.Getter;
@@ -70,6 +71,8 @@ public class ChanceManPlugin extends Plugin
     private EventBus eventBus;
     @Inject
     private ItemsFilter itemsFilter;
+    @Inject
+    private CLog clog;
 
     private ChanceManPanel chanceManPanel;
     private NavigationButton navButton;
@@ -94,6 +97,7 @@ public class ChanceManPlugin extends Plugin
         unlockedItemsManager.setExecutor(fileExecutor);
         rolledItemsManager.setExecutor(fileExecutor);
         rollAnimationManager.startUp();
+        clog.startUp();
 
         if (!isNormalWorld())
         {
@@ -138,6 +142,7 @@ public class ChanceManPlugin extends Plugin
             fileExecutor.shutdownNow();
         }
         getInjector().getInstance(ActionHandler.class).shutDown();
+        clog.shutDown();
 
         // Reset plugin state for a fresh initialization on restart.
         chanceManPanel = null;
@@ -169,6 +174,7 @@ public class ChanceManPlugin extends Plugin
                 }
             }
             rollAnimationManager.setAllTradeableItems(allTradeableItems);
+            clog.setAllTradeableItems(allTradeableItems);
             if (chanceManPanel != null) {
                 SwingUtilities.invokeLater(() -> chanceManPanel.updatePanel());
             }
