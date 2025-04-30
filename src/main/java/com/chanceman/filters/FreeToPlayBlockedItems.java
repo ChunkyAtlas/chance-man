@@ -48,10 +48,15 @@ public enum FreeToPlayBlockedItems {
     DragonstonePlatelegs(ItemID.DRAGONSTONE_PLATELEGS),
 
     // Wilderness capes (the rest are accessible on f2p)
+    Team4Cape(ItemID.WILDERNESS_CAPE_4),
     Team5Cape(ItemID.WILDERNESS_CAPE_5),
+    Team14Cape(ItemID.WILDERNESS_CAPE_14),
     Team15Cape(ItemID.WILDERNESS_CAPE_15),
+    Team24Cape(ItemID.WILDERNESS_CAPE_24),
     Team25Cape(ItemID.WILDERNESS_CAPE_25),
+    Team34Cape(ItemID.WILDERNESS_CAPE_34),
     Team35Cape(ItemID.WILDERNESS_CAPE_35),
+    Team44Cape(ItemID.WILDERNESS_CAPE_44),
     Team45Cape(ItemID.WILDERNESS_CAPE_45),
 
     // Clue Scroll - Random
