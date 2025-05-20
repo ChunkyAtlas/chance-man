@@ -6,6 +6,7 @@ import com.chanceman.account.AccountManager;
 import com.chanceman.filters.EnsouledHeadMapping;
 import com.chanceman.menus.ActionHandler;
 import com.chanceman.filters.ItemsFilter;
+import com.chanceman.ui.DropsTabUI;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.Getter;
@@ -73,6 +74,7 @@ public class ChanceManPlugin extends Plugin
     private EventBus eventBus;
     @Inject
     private ItemsFilter itemsFilter;
+    @Inject private DropsTabUI dropsTabUI;
 
     private ChanceManPanel chanceManPanel;
     private NavigationButton navButton;
@@ -114,6 +116,7 @@ public class ChanceManPlugin extends Plugin
         unlockedItemsManager.setExecutor(fileExecutor);
         rolledItemsManager.setExecutor(fileExecutor);
         rollAnimationManager.startUp();
+        dropsTabUI.startUp();
 
         chanceManPanel = new ChanceManPanel(
                 unlockedItemsManager,
@@ -143,7 +146,7 @@ public class ChanceManPlugin extends Plugin
     {
         if (!featuresActive) return;
         featuresActive = false;
-
+        dropsTabUI.shutDown();
         eventBus.unregister(accountManager);
         getInjector().getInstance(ActionHandler.class).shutDown();
 
