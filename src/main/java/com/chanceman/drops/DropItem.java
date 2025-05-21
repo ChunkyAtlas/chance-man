@@ -5,7 +5,7 @@ import lombok.Setter;
 
 public class DropItem
 {
-    @Getter private final int itemId;
+    @Setter @Getter private int itemId;
     @Setter @Getter private String name;
     @Setter @Getter private String quantity;
     @Setter @Getter private double rarity;
