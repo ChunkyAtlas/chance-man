@@ -51,7 +51,7 @@ public final class WidgetUtils
         {
             for (Widget child : staticKids)
             {
-                child.setHidden(true);
+                if (child != null) child.setHidden(true);
             }
         }
 
@@ -60,7 +60,7 @@ public final class WidgetUtils
         {
             for (Widget child : dynamicKids)
             {
-                child.setHidden(true);
+                if (child != null) child.setHidden(true);
             }
         }
     }

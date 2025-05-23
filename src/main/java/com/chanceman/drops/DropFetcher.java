@@ -1,6 +1,9 @@
 package com.chanceman.drops;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ItemComposition;
 import net.runelite.client.callback.ClientThread;
@@ -13,6 +16,7 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
+
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.io.IOException;
@@ -47,19 +51,38 @@ public class DropFetcher
     public CompletableFuture<NpcDropData> fetch(int npcId, String name, int level)
     {
         return CompletableFuture
-                .supplyAsync(() ->
-                {
-                    String url  = buildWikiUrl(name);
-                    String html = fetchHtml(url);
-                    return parseWithJsoup(npcId, name, level, html);
+                .supplyAsync(() -> {
+                    // 1) Resolve page title via NPC ID search
+                    Optional<String> maybeTitle = findTitleByNpcId(npcId);
+                    String titleToUse = maybeTitle.orElse(name);
+
+                    // 2) Build the URL to fetch
+                    String urlToFetch = buildWikiUrl(titleToUse);
+                    String html;
+                    try
+                    {
+                        html = fetchHtml(urlToFetch);
+                    }
+                    catch (UncheckedIOException e)
+                    {
+                        if (maybeTitle.isPresent())
+                        {
+                            String retryUrl = buildWikiUrl(name);
+                            html = fetchHtml(retryUrl);
+                            titleToUse = name;
+                        }
+                        else
+                        {
+                            throw e;
+                        }
+                    }
+
+                    return parseWithJsoup(npcId, titleToUse, level, html);
                 }, fetchExecutor)
 
-                .thenCompose(data ->
-                {
+                .thenCompose(data -> {
                     CompletableFuture<NpcDropData> resolved = new CompletableFuture<>();
-
-                    clientThread.invoke(() ->
-                    {
+                    clientThread.invoke(() -> {
                         for (DropTableSection sec : data.getDropTableSections())
                         {
                             for (DropItem d : sec.getItems())
@@ -67,8 +90,7 @@ public class DropFetcher
                                 String itemName = d.getName();
                                 int resolvedId = itemManager.search(itemName).stream()
                                         .map(ItemPrice::getId)
-                                        .filter(id ->
-                                        {
+                                        .filter(id -> {
                                             ItemComposition comp = itemManager.getItemComposition(id);
                                             return comp != null
                                                     && comp.getName().equalsIgnoreCase(itemName);
@@ -80,9 +102,55 @@ public class DropFetcher
                         }
                         resolved.complete(data);
                     });
-
                     return resolved;
                 });
+    }
+
+    /**
+     * Query the OSRS Wiki search API with the NPC's numeric ID + "Drops",
+     * return the first page title if found.
+     */
+    private static Optional<String> findTitleByNpcId(int npcId)
+    {
+        String api = "https://oldschool.runescape.wiki/api.php"
+                + "?action=query"
+                + "&list=search"
+                + "&srsearch=" + URLEncoder.encode(npcId + " Drops", StandardCharsets.UTF_8)
+                + "&format=json";
+
+        Request req = new Request.Builder()
+                .url(api)
+                .header("User-Agent", "RuneLite-Client/" + HTTP.hashCode())
+                .build();
+
+        try (Response res = HTTP.newCall(req).execute())
+        {
+            if (!res.isSuccessful())
+            {
+                return Optional.empty();
+            }
+            String json = res.body().string();
+            JsonParser parser = new JsonParser();
+            JsonObject root = parser.parse(json).getAsJsonObject();
+
+            JsonArray results = root
+                    .getAsJsonObject("query")
+                    .getAsJsonArray("search");
+            if (results.size() > 0)
+            {
+                String title = results
+                        .get(0)
+                        .getAsJsonObject()
+                        .get("title")
+                        .getAsString();
+                return Optional.of(title);
+            }
+        }
+        catch (IOException e)
+        {
+            log.warn("ChanceMan[{}]: ID-search failed: {}", npcId, e.toString());
+        }
+        return Optional.empty();
     }
 
     private static String buildWikiUrl(String name)
@@ -117,11 +185,11 @@ public class DropFetcher
     {
         Document doc = Jsoup.parse(html);
         Elements tables = doc.select("table.item-drops");
+
         List<DropTableSection> sections = new ArrayList<>();
 
         for (Element table : tables)
         {
-            // find the section header
             String header = "Drops";
             Element prev = table.previousElementSibling();
             while (prev != null)
@@ -166,32 +234,19 @@ public class DropFetcher
         if (text.contains("/"))
         {
             String[] f = text.split("/");
-            try
-            {
-                return Double.parseDouble(f[0]) / Double.parseDouble(f[1]);
-            }
+            try { return Double.parseDouble(f[0]) / Double.parseDouble(f[1]); }
             catch (NumberFormatException ignore) { }
         }
-        try
-        {
-            return Double.parseDouble(text);
-        }
-        catch (NumberFormatException ignore)
-        {
-            return 0.0;
-        }
+        try { return Double.parseDouble(text); }
+        catch (NumberFormatException ignore) { return 0.0; }
     }
 
     private static int parsePrice(String text)
     {
-        try
-        {
+        try {
             String num = text.replaceAll("[,\\.]", "");
             return Integer.parseInt(num);
         }
-        catch (Exception ignore)
-        {
-            return 0;
-        }
+        catch (Exception ignore) { return 0; }
     }
 }
