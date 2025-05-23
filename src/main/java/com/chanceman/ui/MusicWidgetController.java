@@ -255,17 +255,14 @@ public class MusicWidgetController
             return;
         }
 
-        Widget root       = client.getWidget(MUSIC_GROUP, 0);
-        Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
-        Widget jukebox    = client.getWidget(MUSIC_GROUP, 6);
-
-        // 1) Hide any dynamic widgets under the root (lvl text, bar, counter)
+        // Hide any dynamic children created in applyOverride (lvl text, bar bg, fill, and counter)
+        Widget root = client.getWidget(MUSIC_GROUP, 0);
         if (root != null)
         {
-            Widget[] dynRoot = root.getDynamicChildren();
-            if (dynRoot != null)
+            Widget[] dynChildren = root.getDynamicChildren();
+            if (dynChildren != null)
             {
-                for (Widget w : dynRoot)
+                for (Widget w : dynChildren)
                 {
                     w.setHidden(true);
                     w.revalidate();
@@ -273,65 +270,22 @@ public class MusicWidgetController
             }
         }
 
-        // 2) Hide injected drop icons under scrollable
-        if (scrollable != null && backupScrollStaticKids != null && backupScrollDynamicKids != null)
-        {
-            // Hide everything
-            for (Widget w : scrollable.getChildren())
-            {
-                w.setHidden(true);
-            }
-            for (Widget w : scrollable.getDynamicChildren())
-            {
-                w.setHidden(true);
-            }
-            // Un-hide only the original backups
-            for (Widget w : backupScrollStaticKids)
-            {
-                w.setHidden(false);
-            }
-            for (Widget w : backupScrollDynamicKids)
-            {
-                w.setHidden(false);
-            }
-            scrollable.revalidate();
-        }
+        // Grab all the static widgets we need to restore
+        Widget title      = client.getWidget(MUSIC_GROUP, 8);
+        Widget overlay    = client.getWidget(MUSIC_GROUP, 5);
+        Widget jukebox    = client.getWidget(MUSIC_GROUP, 6);
+        Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
+        Widget scrollbar  = client.getWidget(MUSIC_GROUP, 7);
+        Widget progress   = client.getWidget(MUSIC_GROUP, 9);
 
-        // 3) Hide injected widgets under jukebox
-        if (jukebox != null && backupJukeboxStaticKids != null && backupJukeboxDynamicKids != null)
-        {
-            for (Widget w : jukebox.getChildren())
-            {
-                w.setHidden(true);
-            }
-            for (Widget w : jukebox.getDynamicChildren())
-            {
-                w.setHidden(true);
-            }
-            for (Widget w : backupJukeboxStaticKids)
-            {
-                w.setHidden(false);
-            }
-            for (Widget w : backupJukeboxDynamicKids)
-            {
-                w.setHidden(false);
-            }
-            jukebox.revalidate();
-        }
-
-        // 4) Restore title & built-in progress bar (IDs 9–19), overlay, scrollbar, progress
-        Widget title     = client.getWidget(MUSIC_GROUP, 8);
-        Widget overlay   = client.getWidget(MUSIC_GROUP, 5);
-        Widget scrollbar = client.getWidget(MUSIC_GROUP, 7);
-        Widget progress  = client.getWidget(MUSIC_GROUP, 9);
-
+        // Restore the original title and the built-in progress bar pieces
         if (title != null && originalTitleText != null)
         {
             title.setText(originalTitleText);
             title.revalidate();
-            for (int id = 9; id <= 19; id++)
+            for (int childId = 9; childId <= 19; childId++)
             {
-                Widget w = client.getWidget(MUSIC_GROUP, id);
+                Widget w = client.getWidget(MUSIC_GROUP, childId);
                 if (w != null)
                 {
                     w.setHidden(false);
@@ -345,6 +299,60 @@ public class MusicWidgetController
             overlay.setHidden(false);
             overlay.revalidate();
         }
+
+        // Restore jukebox children
+        if (jukebox != null && backupJukeboxStaticKids != null && backupJukeboxDynamicKids != null)
+        {
+            // hide anything that wasn't in the original static/dynamic lists
+            for (Widget w : Objects.requireNonNull(jukebox.getChildren()))
+            {
+                if (!backupJukeboxStaticKids.contains(w))
+                {
+                    w.setHidden(true);
+                }
+            }
+            // un-hide the originals
+            for (Widget w : backupJukeboxStaticKids)
+            {
+                w.setHidden(false);
+            }
+            for (Widget w : jukebox.getDynamicChildren())
+            {
+                if (!backupJukeboxDynamicKids.contains(w))
+                {
+                    w.setHidden(true);
+                }
+            }
+            for (Widget w : backupJukeboxDynamicKids)
+            {
+                w.setHidden(false);
+            }
+            jukebox.setHidden(false);
+            jukebox.revalidate();
+        }
+
+        // Restore scrollable children
+        if (scrollable != null && backupScrollStaticKids != null && backupScrollDynamicKids != null)
+        {
+            for (Widget w : scrollable.getDynamicChildren())
+            {
+                if (!backupScrollDynamicKids.contains(w))
+                {
+                    w.setHidden(true);
+                }
+            }
+            for (Widget w : backupScrollStaticKids)
+            {
+                w.setHidden(false);
+            }
+            for (Widget w : backupScrollDynamicKids)
+            {
+                w.setHidden(false);
+            }
+            scrollable.revalidate();
+        }
+
+        // Restore scrollbar & progress widgets
         if (scrollbar != null)
         {
             scrollbar.setHidden(false);
@@ -356,7 +364,7 @@ public class MusicWidgetController
             progress.revalidate();
         }
 
-        // 5) Fire onLoad listeners for full refresh
+        // Fire any onLoad listeners to fully refresh
         if (root != null && root.getOnLoadListener() != null)
         {
             client.createScriptEvent(root.getOnLoadListener())
@@ -386,9 +394,13 @@ public class MusicWidgetController
             jukebox.revalidate();
         }
 
-        // 6) Clear only transient state (keep the backups for next toggle)
-        originalTitleText = null;
-        currentDrops      = null;
-        overrideActive    = false;
+        // Clear the override state
+        backupJukeboxStaticKids  = null;
+        backupJukeboxDynamicKids = null;
+        backupScrollStaticKids   = null;
+        backupScrollDynamicKids  = null;
+        originalTitleText        = null;
+        currentDrops             = null;
+        overrideActive           = false;
     }
 }
