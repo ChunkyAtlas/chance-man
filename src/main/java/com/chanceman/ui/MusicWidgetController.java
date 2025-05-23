@@ -255,14 +255,17 @@ public class MusicWidgetController
             return;
         }
 
-        // Hide any dynamic children created in applyOverride (lvl text, bar bg, fill, and counter)
-        Widget root = client.getWidget(MUSIC_GROUP, 0);
+        Widget root       = client.getWidget(MUSIC_GROUP, 0);
+        Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
+        Widget jukebox    = client.getWidget(MUSIC_GROUP, 6);
+
+        // 1) Hide any dynamic widgets under the root (lvl text, bar, counter)
         if (root != null)
         {
-            Widget[] dynChildren = root.getDynamicChildren();
-            if (dynChildren != null)
+            Widget[] dynRoot = root.getDynamicChildren();
+            if (dynRoot != null)
             {
-                for (Widget w : dynChildren)
+                for (Widget w : dynRoot)
                 {
                     w.setHidden(true);
                     w.revalidate();
@@ -270,22 +273,63 @@ public class MusicWidgetController
             }
         }
 
-        // Grab all the static widgets we need to restore
-        Widget title      = client.getWidget(MUSIC_GROUP, 8);
-        Widget overlay    = client.getWidget(MUSIC_GROUP, 5);
-        Widget jukebox    = client.getWidget(MUSIC_GROUP, 6);
-        Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
-        Widget scrollbar  = client.getWidget(MUSIC_GROUP, 7);
-        Widget progress   = client.getWidget(MUSIC_GROUP, 9);
+        // 2) Hide injected drop icons under scrollable
+        if (scrollable != null && backupScrollStaticKids != null && backupScrollDynamicKids != null)
+        {
 
-        // Restore the original title and the built-in progress bar pieces
+            for (Widget w : scrollable.getChildren())
+            {
+                w.setHidden(true);
+            }
+            for (Widget w : scrollable.getDynamicChildren())
+            {
+                w.setHidden(true);
+            }
+
+            for (Widget w : backupScrollStaticKids)
+            {
+                w.setHidden(false);
+            }
+            for (Widget w : backupScrollDynamicKids)
+            {
+                w.setHidden(false);
+            }
+            scrollable.revalidate();
+        }
+
+        if (jukebox != null && backupJukeboxStaticKids != null && backupJukeboxDynamicKids != null)
+        {
+            for (Widget w : jukebox.getChildren())
+            {
+                w.setHidden(true);
+            }
+            for (Widget w : jukebox.getDynamicChildren())
+            {
+                w.setHidden(true);
+            }
+            for (Widget w : backupJukeboxStaticKids)
+            {
+                w.setHidden(false);
+            }
+            for (Widget w : backupJukeboxDynamicKids)
+            {
+                w.setHidden(false);
+            }
+            jukebox.revalidate();
+        }
+
+        Widget title     = client.getWidget(MUSIC_GROUP, 8);
+        Widget overlay   = client.getWidget(MUSIC_GROUP, 5);
+        Widget scrollbar = client.getWidget(MUSIC_GROUP, 7);
+        Widget progress  = client.getWidget(MUSIC_GROUP, 9);
+
         if (title != null && originalTitleText != null)
         {
             title.setText(originalTitleText);
             title.revalidate();
-            for (int childId = 9; childId <= 19; childId++)
+            for (int id = 9; id <= 19; id++)
             {
-                Widget w = client.getWidget(MUSIC_GROUP, childId);
+                Widget w = client.getWidget(MUSIC_GROUP, id);
                 if (w != null)
                 {
                     w.setHidden(false);
@@ -299,60 +343,6 @@ public class MusicWidgetController
             overlay.setHidden(false);
             overlay.revalidate();
         }
-
-        // Restore jukebox children
-        if (jukebox != null && backupJukeboxStaticKids != null && backupJukeboxDynamicKids != null)
-        {
-            // hide anything that wasn't in the original static/dynamic lists
-            for (Widget w : Objects.requireNonNull(jukebox.getChildren()))
-            {
-                if (!backupJukeboxStaticKids.contains(w))
-                {
-                    w.setHidden(true);
-                }
-            }
-            // un-hide the originals
-            for (Widget w : backupJukeboxStaticKids)
-            {
-                w.setHidden(false);
-            }
-            for (Widget w : jukebox.getDynamicChildren())
-            {
-                if (!backupJukeboxDynamicKids.contains(w))
-                {
-                    w.setHidden(true);
-                }
-            }
-            for (Widget w : backupJukeboxDynamicKids)
-            {
-                w.setHidden(false);
-            }
-            jukebox.setHidden(false);
-            jukebox.revalidate();
-        }
-
-        // Restore scrollable children
-        if (scrollable != null && backupScrollStaticKids != null && backupScrollDynamicKids != null)
-        {
-            for (Widget w : scrollable.getDynamicChildren())
-            {
-                if (!backupScrollDynamicKids.contains(w))
-                {
-                    w.setHidden(true);
-                }
-            }
-            for (Widget w : backupScrollStaticKids)
-            {
-                w.setHidden(false);
-            }
-            for (Widget w : backupScrollDynamicKids)
-            {
-                w.setHidden(false);
-            }
-            scrollable.revalidate();
-        }
-
-        // Restore scrollbar & progress widgets
         if (scrollbar != null)
         {
             scrollbar.setHidden(false);
@@ -364,7 +354,6 @@ public class MusicWidgetController
             progress.revalidate();
         }
 
-        // Fire any onLoad listeners to fully refresh
         if (root != null && root.getOnLoadListener() != null)
         {
             client.createScriptEvent(root.getOnLoadListener())
@@ -394,13 +383,8 @@ public class MusicWidgetController
             jukebox.revalidate();
         }
 
-        // Clear the override state
-        backupJukeboxStaticKids  = null;
-        backupJukeboxDynamicKids = null;
-        backupScrollStaticKids   = null;
-        backupScrollDynamicKids  = null;
-        originalTitleText        = null;
-        currentDrops             = null;
-        overrideActive           = false;
+        originalTitleText = null;
+        currentDrops      = null;
+        overrideActive    = false;
     }
 }
