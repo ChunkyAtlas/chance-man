@@ -38,7 +38,6 @@ public class DropFetcher
     {
         this.itemManager  = itemManager;
         this.clientThread = clientThread;
-        // optional: custom thread factory so you can debug these threads
         this.fetchExecutor = Executors.newFixedThreadPool(
                 2,
                 new ThreadFactoryBuilder().setNameFormat("dropfetch-%d").build()
@@ -146,7 +145,6 @@ public class DropFetcher
                         int ge          = parsePrice(td.get(4).text());
                         int ha          = parsePrice(td.get(5).text());
 
-                        // itemId = 0 for now; we’ll fill it on the client thread
                         return new DropItem(0, itemName, qty, rarity, ge, ha, imgUrl);
                     })
                     .collect(Collectors.toList());
