@@ -52,11 +52,11 @@ public class DropFetcher
     {
         return CompletableFuture
                 .supplyAsync(() -> {
-                    // 1) Resolve page title via NPC ID search
+                    // resolve page title via NPC ID search
                     Optional<String> maybeTitle = findTitleByNpcId(npcId);
                     String titleToUse = maybeTitle.orElse(name);
 
-                    // 2) Build the URL to fetch
+                    // build the URL to fetch
                     String urlToFetch = buildWikiUrl(titleToUse);
                     String html;
                     try
@@ -76,7 +76,6 @@ public class DropFetcher
                             throw e;
                         }
                     }
-
                     return parseWithJsoup(npcId, titleToUse, level, html);
                 }, fetchExecutor)
 
@@ -180,7 +179,6 @@ public class DropFetcher
         }
     }
 
-    /** Parses the HTML into names, quantities, rarity, etc. */
     private NpcDropData parseWithJsoup(int npcId, String name, int level, String html)
     {
         Document doc = Jsoup.parse(html);
@@ -206,14 +204,8 @@ public class DropFetcher
                     .map(row -> row.select("td"))
                     .filter(td -> td.size() >= 6)
                     .map(td -> {
-                        String imgUrl   = td.select("img").attr("src");
                         String itemName = td.get(1).text().replace("(m)", "").trim();
-                        String qty      = td.get(2).text();
-                        double rarity   = parseRarity(td.get(3).text());
-                        int ge          = parsePrice(td.get(4).text());
-                        int ha          = parsePrice(td.get(5).text());
-
-                        return new DropItem(0, itemName, qty, rarity, ge, ha, imgUrl);
+                        return new DropItem(0, itemName);
                     })
                     .collect(Collectors.toList());
 
@@ -224,29 +216,5 @@ public class DropFetcher
         }
 
         return new NpcDropData(npcId, name, level, sections);
-    }
-
-    private static double parseRarity(String text)
-    {
-        text = text.replace("~", "").trim();
-        if (text.equalsIgnoreCase("always"))
-            return 1.0;
-        if (text.contains("/"))
-        {
-            String[] f = text.split("/");
-            try { return Double.parseDouble(f[0]) / Double.parseDouble(f[1]); }
-            catch (NumberFormatException ignore) { }
-        }
-        try { return Double.parseDouble(text); }
-        catch (NumberFormatException ignore) { return 0.0; }
-    }
-
-    private static int parsePrice(String text)
-    {
-        try {
-            String num = text.replaceAll("[,\\.]", "");
-            return Integer.parseInt(num);
-        }
-        catch (Exception ignore) { return 0; }
     }
 }

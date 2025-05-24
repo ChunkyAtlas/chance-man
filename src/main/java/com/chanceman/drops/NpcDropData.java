@@ -1,7 +1,12 @@
 package com.chanceman.drops;
 
+import lombok.Getter;
+import lombok.Setter;
+
 import java.util.List;
 
+@Setter
+@Getter
 public class NpcDropData
 {
     private int npcId;
@@ -17,12 +22,4 @@ public class NpcDropData
         this.dropTableSections = dropTableSections;
     }
 
-    public int getNpcId() { return npcId; }
-    public void setNpcId(int npcId) { this.npcId = npcId; }
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-    public int getLevel() { return level; }
-    public void setLevel(int level) { this.level = level; }
-    public List<DropTableSection> getDropTableSections() { return dropTableSections; }
-    public void setDropTableSections(List<DropTableSection> dropTableSections) { this.dropTableSections = dropTableSections; }
 }
