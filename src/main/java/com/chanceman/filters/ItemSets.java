@@ -133,6 +133,7 @@ public enum ItemSets {
     AncientDragonhide(ItemID.SET_DHIDE_ANCIENT),
 
     // Miscellaneous sets
+    OathplateSet(ItemID.SET_OATHPLATE_ARMOUR),
     PartyhatSet(ItemID.SET_PARTYHAT),
     HalloweenMaskSet(ItemID.SET_HALLOWEEN_MASK),
     AncestralRobes(ItemID.SET_ANCESTRAL_ROBES),
