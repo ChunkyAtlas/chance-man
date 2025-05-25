@@ -12,13 +12,13 @@ public class DropsTabUI
 {
     private final EventBus eventBus;
     private final DropsMenuListener menuListener;
-    private final InventoryTabListener tabListener;
+    private final TabListener tabListener;
 
     @Inject
     public DropsTabUI(
             EventBus eventBus,
             DropsMenuListener menuListener,
-            InventoryTabListener tabListener
+            TabListener tabListener
     )
     {
         this.eventBus = eventBus;

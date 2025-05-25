@@ -12,14 +12,14 @@ import javax.inject.Singleton;
 
 @Slf4j
 @Singleton
-public class InventoryTabListener
+public class TabListener
 {
     private final Client client;
     private final ClientThread clientThread;
     private final MusicWidgetController widgetController;
 
     @Inject
-    public InventoryTabListener(
+    public TabListener(
             Client client,
             ClientThread clientThread,
             MusicWidgetController widgetController

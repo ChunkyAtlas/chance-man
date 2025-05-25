@@ -23,6 +23,7 @@ public class MusicWidgetController
     private final Client client;
     private final ClientThread clientThread;
     private final RolledItemsManager rolledItemsManager;
+    private final SpriteOverrideManager spriteOverrideManager;
 
     private NpcDropData currentDrops = null;
     private List<Widget> backupJukeboxStaticKids = null;
@@ -36,12 +37,14 @@ public class MusicWidgetController
     public MusicWidgetController(
             Client client,
             ClientThread clientThread,
-            RolledItemsManager rolledItemsManager
+            RolledItemsManager rolledItemsManager,
+            SpriteOverrideManager spriteOverrideManager
     )
     {
         this.client = client;
         this.clientThread = clientThread;
         this.rolledItemsManager = rolledItemsManager;
+        this.spriteOverrideManager = spriteOverrideManager;
     }
 
     public boolean hasData()
@@ -59,11 +62,13 @@ public class MusicWidgetController
         this.currentDrops = dropData;
         this.overrideActive = true;
         applyOverride(dropData);
+        spriteOverrideManager.register();
     }
 
     public void restore()
     {
         if (!overrideActive) return;
+        spriteOverrideManager.unregister();
         revertOverride();
     }
 
@@ -108,7 +113,7 @@ public class MusicWidgetController
 
             WidgetUtils.hideAllChildrenSafely(root);
 
-            int lvlX = Objects.requireNonNull(title).getOriginalX() + title.getOriginalWidth() + 100;
+            int lvlX = Objects.requireNonNull(title).getOriginalX() + title.getOriginalWidth() + 83;
             int lvlY = title.getOriginalY();
 
             Widget lvl = root.createChild(-1);
