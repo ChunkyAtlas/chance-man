@@ -31,15 +31,15 @@ import java.util.stream.Collectors;
 @Singleton
 public class DropFetcher
 {
-    private static final OkHttpClient HTTP = new OkHttpClient();
-
-    private final ItemManager   itemManager;
-    private final ClientThread  clientThread;
-    private final Executor      fetchExecutor;
+    private final OkHttpClient httpClient;
+    private final ItemManager itemManager;
+    private final ClientThread clientThread;
+    private final ExecutorService fetchExecutor;
 
     @Inject
-    public DropFetcher(ItemManager itemManager, ClientThread clientThread)
+    public DropFetcher(OkHttpClient httpClient, ItemManager itemManager, ClientThread clientThread)
     {
+        this.httpClient = httpClient;
         this.itemManager  = itemManager;
         this.clientThread = clientThread;
         this.fetchExecutor = Executors.newFixedThreadPool(
@@ -48,15 +48,16 @@ public class DropFetcher
         );
     }
 
+    /**
+     * Fetch drop data asynchronously.
+     */
     public CompletableFuture<NpcDropData> fetch(int npcId, String name, int level)
     {
         return CompletableFuture
                 .supplyAsync(() -> {
-                    // resolve page title via NPC ID search
                     Optional<String> maybeTitle = findTitleByNpcId(npcId);
                     String titleToUse = maybeTitle.orElse(name);
 
-                    // build the URL to fetch
                     String urlToFetch = buildWikiUrl(titleToUse);
                     String html;
                     try
@@ -67,8 +68,7 @@ public class DropFetcher
                     {
                         if (maybeTitle.isPresent())
                         {
-                            String retryUrl = buildWikiUrl(name);
-                            html = fetchHtml(retryUrl);
+                            html = fetchHtml(buildWikiUrl(name));
                             titleToUse = name;
                         }
                         else
@@ -109,7 +109,7 @@ public class DropFetcher
      * Query the OSRS Wiki search API with the NPC's numeric ID + "Drops",
      * return the first page title if found.
      */
-    private static Optional<String> findTitleByNpcId(int npcId)
+    private Optional<String> findTitleByNpcId(int npcId)
     {
         String api = "https://oldschool.runescape.wiki/api.php"
                 + "?action=query"
@@ -119,10 +119,10 @@ public class DropFetcher
 
         Request req = new Request.Builder()
                 .url(api)
-                .header("User-Agent", "RuneLite-Client/" + HTTP.hashCode())
+                .header("User-Agent", "RuneLite-Client/" + httpClient.hashCode())
                 .build();
 
-        try (Response res = HTTP.newCall(req).execute())
+        try (Response res = httpClient.newCall(req).execute())
         {
             if (!res.isSuccessful())
             {
@@ -152,20 +152,20 @@ public class DropFetcher
         return Optional.empty();
     }
 
-    private static String buildWikiUrl(String name)
+    private String buildWikiUrl(String name)
     {
         String title = URLEncoder.encode(name.replace(' ', '_'), StandardCharsets.UTF_8);
         return "https://oldschool.runescape.wiki/w/" + title + "#Drops";
     }
 
-    private static String fetchHtml(String url)
+    private String fetchHtml(String url)
     {
         Request req = new Request.Builder()
                 .url(url)
-                .header("User-Agent", "RuneLite-Client/" + HTTP.hashCode())
+                .header("User-Agent", "RuneLite-Client/" + httpClient.hashCode())
                 .build();
 
-        try (Response res = HTTP.newCall(req).execute())
+        try (Response res = httpClient.newCall(req).execute())
         {
             if (!res.isSuccessful())
             {
@@ -203,10 +203,7 @@ public class DropFetcher
             List<DropItem> items = table.select("tbody tr").stream()
                     .map(row -> row.select("td"))
                     .filter(td -> td.size() >= 6)
-                    .map(td -> {
-                        String itemName = td.get(1).text().replace("(m)", "").trim();
-                        return new DropItem(0, itemName);
-                    })
+                    .map(td -> new DropItem(0, td.get(1).text().replace("(m)", "").trim()))
                     .collect(Collectors.toList());
 
             if (!items.isEmpty())
@@ -216,5 +213,13 @@ public class DropFetcher
         }
 
         return new NpcDropData(npcId, name, level, sections);
+    }
+
+    /**
+     *  shut down the executor
+     */
+    public void shutdown()
+    {
+        fetchExecutor.shutdownNow();
     }
 }

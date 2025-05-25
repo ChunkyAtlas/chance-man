@@ -2,32 +2,32 @@ package com.chanceman.drops;
 
 import static net.runelite.client.RuneLite.RUNELITE_DIR;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.chanceman.account.AccountManager;
+import com.google.gson.Gson;
 import lombok.extern.slf4j.Slf4j;
-
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.concurrent.CompletableFuture;
 
 @Slf4j
 @Singleton
 public class DropCache
 {
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-
+    private final Gson gson;
     private final AccountManager accountManager;
-    private final DropFetcher    dropFetcher;
+    private final DropFetcher dropFetcher;
 
     @Inject
-    public DropCache(AccountManager accountManager, DropFetcher dropFetcher)
+    public DropCache(Gson gson, AccountManager accountManager, DropFetcher dropFetcher)
     {
+        this.gson = gson;
         this.accountManager = accountManager;
-        this.dropFetcher    = dropFetcher;
+        this.dropFetcher = dropFetcher;
     }
 
     /**
@@ -43,8 +43,7 @@ public class DropCache
         }
         catch (IOException ex)
         {
-            log.error("Could not resolve cache file for {} ({}, lvl {})",
-                    npcId, name, level, ex);
+            log.error("Could not resolve cache file for {} ({}, lvl {})", npcId, name, level, ex);
             return CompletableFuture.failedFuture(ex);
         }
 
@@ -55,7 +54,7 @@ public class DropCache
                         try
                         {
                             String json = Files.readString(file, StandardCharsets.UTF_8);
-                            return GSON.fromJson(json, NpcDropData.class);
+                            return gson.fromJson(json, NpcDropData.class);
                         }
                         catch (Exception e)
                         {
@@ -82,7 +81,7 @@ public class DropCache
                             {
                                 try
                                 {
-                                    String json = GSON.toJson(data);
+                                    String json = gson.toJson(data);
                                     Files.createDirectories(file.getParent());
                                     Files.writeString(
                                             file,
