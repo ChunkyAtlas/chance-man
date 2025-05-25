@@ -77,7 +77,7 @@ public class ChanceManPlugin extends Plugin
     private ItemsFilter itemsFilter;
     @Inject private DropsTabUI dropsTabUI;
     @Inject private DropFetcher dropFetcher;
-
+    
     private ChanceManPanel chanceManPanel;
     private NavigationButton navButton;
     private ExecutorService fileExecutor;
