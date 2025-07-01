@@ -8,6 +8,7 @@ import com.chanceman.filters.EnsouledHeadMapping;
 import com.chanceman.menus.ActionHandler;
 import com.chanceman.filters.ItemsFilter;
 import com.chanceman.ui.DropsTabUI;
+import com.chanceman.ui.MusicWidgetController;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.Getter;
@@ -77,6 +78,7 @@ public class ChanceManPlugin extends Plugin
     private ItemsFilter itemsFilter;
     @Inject private DropsTabUI dropsTabUI;
     @Inject private DropFetcher dropFetcher;
+    @Inject private MusicWidgetController musicWidgetController;
 
     private ChanceManPanel chanceManPanel;
     private NavigationButton navButton;
@@ -151,6 +153,7 @@ public class ChanceManPlugin extends Plugin
         dropsTabUI.shutDown();
         eventBus.unregister(accountManager);
         getInjector().getInstance(ActionHandler.class).shutDown();
+        musicWidgetController.restore();
 
         if (clientToolbar != null && navButton != null)
         {
