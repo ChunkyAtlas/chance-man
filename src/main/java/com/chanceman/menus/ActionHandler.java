@@ -182,6 +182,8 @@ public class ActionHandler {
 		}
 		if (SkillOp.isSkillOp(option))
 			return restrictions.isSkillOpEnabled(option);
+		if (Spell.isSpell(option))
+			return restrictions.isSpellOpEnabled(option);
 		if (Spell.isSpell(target))
 			return restrictions.isSpellOpEnabled(target);
 

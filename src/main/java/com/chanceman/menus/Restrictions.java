@@ -52,7 +52,7 @@ public class Restrictions
 
 	}
 
-	public static final int SPELL_REQUIREMENT_OVERLAY_NORMAL = 14287050;
+	public static final int SPELL_REQUIREMENT_OVERLAY_NORMAL = 14287051;
 	public static final int AUTOCAST_REQUIREMENT_OVERLAY_NORMAL = 13172738;
 
 	private static final HashMap<Integer, SkillOp> ITEM_TO_OP = new HashMap<>();
@@ -149,11 +149,11 @@ public class Restrictions
 			}
 		}
 
-		Widget spellOverlay = client.getWidget(SPELL_REQUIREMENT_OVERLAY_NORMAL);
-		if (spellOverlay != null) return processChildren(spellOverlay);
-
 		Widget autocastOverlay = client.getWidget(AUTOCAST_REQUIREMENT_OVERLAY_NORMAL);
 		if (autocastOverlay != null) return processChildren(autocastOverlay);
+
+		Widget spellOverlay = client.getWidget(SPELL_REQUIREMENT_OVERLAY_NORMAL);
+		if (spellOverlay != null) return processChildren(spellOverlay);
 		return false;
 	}
 
