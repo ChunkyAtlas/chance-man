@@ -47,7 +47,10 @@ public class ActionHandler {
 	 */
 	private int getItemId(MenuEntryAdded event, MenuEntry entry)
 	{
-		int raw = GROUND_ACTIONS.contains(entry.getType())
+		MenuAction type = entry.getType();
+		boolean hasItemId = entry.getItemId() > 0 || event.getItemId() > 0;
+		if (!GROUND_ACTIONS.contains(type) && !hasItemId) {return -1;}
+		int raw = GROUND_ACTIONS.contains(type)
 				? event.getIdentifier()
 				: Math.max(event.getItemId(), entry.getItemId());
 		return plugin.getItemManager().canonicalize(raw);
@@ -144,13 +147,9 @@ public class ActionHandler {
 	/**
 	 * Returns true if the entry appears to be for a ground item.
 	 */
-	private boolean isGroundItem(MenuEntry entry) {
-		String option = Text.removeTags(entry.getOption()).toLowerCase();
-		MenuAction action = entry.getType();
-		return action.toString().contains("GROUND_ITEM")
-				|| option.contains("take")
-				|| option.contains("pick-up")
-				|| option.contains("pickup");
+	private boolean isGroundItem(MenuEntry entry)
+	{
+		return GROUND_ACTIONS.contains(entry.getType());
 	}
 
 	/**
@@ -206,13 +205,10 @@ public class ActionHandler {
 	 * If a ground item is locked, this method consumes the event.
 	 */
 	public static void handleGroundItems(ItemManager itemManager, UnlockedItemsManager unlockedItemsManager,
-										 MenuOptionClicked event, ChanceManPlugin plugin) {
-		String option = event.getMenuEntry().getOption().toLowerCase();
-		if (event.getMenuAction() != null &&
-				(event.getMenuAction().toString().contains("GROUND_ITEM")
-						|| option.contains("take")
-						|| option.contains("pick-up")
-						|| option.contains("pickup"))) {
+										 MenuOptionClicked event, ChanceManPlugin plugin)
+	{
+		if (event.getMenuAction() != null && GROUND_ACTIONS.contains(event.getMenuAction()))
+		{
 			int rawItemId = event.getId() != -1 ? event.getId() : event.getMenuEntry().getItemId();
 			int canonicalGroundId = itemManager.canonicalize(rawItemId);
 			if (plugin.isTradeable(canonicalGroundId)
