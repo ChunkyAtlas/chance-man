@@ -23,6 +23,7 @@ public enum SkillOp
 	SMELT("Smelt"),
 	SHEAR("Shear"),
 	CLEAN("Clean"),
+	FIRE("Fire"),
 	CRAFT_RUNE("Craft-rune");
 
 	private final String option;
