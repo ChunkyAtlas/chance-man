@@ -242,6 +242,7 @@ public class MusicWidgetController
             icon.setHidden(false);
             icon.setType(WidgetType.GRAPHIC);
             icon.setItemId(itemId);
+            icon.setName(d.getName());
             icon.setItemQuantityMode(ItemQuantityMode.NEVER);
             icon.setOriginalX(x);
             icon.setOriginalY(y);
@@ -377,5 +378,9 @@ public class MusicWidgetController
         originalTitleText = null;
         currentDrops      = null;
         overrideActive    = false;
+        backupJukeboxStaticKids = null;
+        backupJukeboxDynamicKids = null;
+        backupScrollStaticKids  = null;
+        backupScrollDynamicKids = null;
     }
 }
