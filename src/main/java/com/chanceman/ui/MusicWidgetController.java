@@ -24,6 +24,7 @@ public class MusicWidgetController
     private final ClientThread clientThread;
     private final RolledItemsManager rolledItemsManager;
     private final SpriteOverrideManager spriteOverrideManager;
+    private final ItemSpriteCache itemSpriteCache;
 
     private NpcDropData currentDrops = null;
     private List<Widget> backupJukeboxStaticKids = null;
@@ -38,13 +39,15 @@ public class MusicWidgetController
             Client client,
             ClientThread clientThread,
             RolledItemsManager rolledItemsManager,
-            SpriteOverrideManager spriteOverrideManager
+            SpriteOverrideManager spriteOverrideManager,
+            ItemSpriteCache itemSpriteCache
     )
     {
         this.client = client;
         this.clientThread = clientThread;
         this.rolledItemsManager = rolledItemsManager;
         this.spriteOverrideManager = spriteOverrideManager;
+        this.itemSpriteCache = itemSpriteCache;
     }
 
     public boolean hasData()
@@ -69,6 +72,7 @@ public class MusicWidgetController
     {
         if (!overrideActive) return;
         spriteOverrideManager.unregister();
+        itemSpriteCache.clear();
         revertOverride();
     }
 
@@ -241,14 +245,13 @@ public class MusicWidgetController
             Widget icon = Objects.requireNonNull(scrollable).createChild(-1);
             icon.setHidden(false);
             icon.setType(WidgetType.GRAPHIC);
-            icon.setItemId(itemId);
-            icon.setName(d.getName());
+            int spriteId = itemSpriteCache.getSpriteId(itemId);
+            icon.setSpriteId(spriteId);
             icon.setItemQuantityMode(ItemQuantityMode.NEVER);
             icon.setOriginalX(x);
             icon.setOriginalY(y);
             icon.setOriginalWidth(ICON_SIZE);
             icon.setOriginalHeight(ICON_SIZE);
-            icon.setBorderType(1);
             icon.setOpacity(rolledIds.contains(itemId) ? 0 : 150);
             icon.revalidate();
 
