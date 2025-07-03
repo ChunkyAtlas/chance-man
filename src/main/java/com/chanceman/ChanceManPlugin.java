@@ -8,6 +8,7 @@ import com.chanceman.filters.EnsouledHeadMapping;
 import com.chanceman.menus.ActionHandler;
 import com.chanceman.filters.ItemsFilter;
 import com.chanceman.ui.DropsTabUI;
+import com.chanceman.ui.DropsTooltipOverlay;
 import com.chanceman.ui.MusicWidgetController;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
@@ -58,6 +59,8 @@ public class ChanceManPlugin extends Plugin
     private ItemManager itemManager;
     @Inject
     private ChanceManOverlay chanceManOverlay;
+    @Inject
+    private DropsTooltipOverlay dropsTooltipOverlay;
     @Inject
     private Gson gson;
     @Inject
@@ -116,6 +119,7 @@ public class ChanceManPlugin extends Plugin
         getInjector().getInstance(ActionHandler.class).startUp();
         eventBus.register(accountManager);
         overlayManager.add(chanceManOverlay);
+        overlayManager.add(dropsTooltipOverlay);
         fileExecutor = Executors.newSingleThreadExecutor();
         unlockedItemsManager.setExecutor(fileExecutor);
         rolledItemsManager.setExecutor(fileExecutor);
@@ -163,6 +167,7 @@ public class ChanceManPlugin extends Plugin
         if (overlayManager != null)
         {
             overlayManager.remove(chanceManOverlay);
+            overlayManager.remove(dropsTooltipOverlay);
         }
         if (rollAnimationManager != null)
         {

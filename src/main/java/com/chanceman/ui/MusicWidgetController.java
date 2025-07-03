@@ -32,6 +32,7 @@ public class MusicWidgetController
     private List<Widget> backupScrollStaticKids = null;
     private List<Widget> backupScrollDynamicKids = null;
     private String originalTitleText = null;
+    @Getter private final Map<Widget, Integer> iconItemMap = new HashMap<>();
     @Getter private boolean overrideActive = false;
 
     @Inject
@@ -78,7 +79,7 @@ public class MusicWidgetController
 
     private void applyOverride(NpcDropData dropData)
     {
-
+        iconItemMap.clear();
         int[] toHide = {9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
         for (int childId : toHide)
         {
@@ -255,6 +256,8 @@ public class MusicWidgetController
             icon.setOpacity(rolledIds.contains(itemId) ? 0 : 150);
             icon.revalidate();
 
+            iconItemMap.put(icon, itemId);
+
             displayIndex++;
         }
 
@@ -385,5 +388,6 @@ public class MusicWidgetController
         backupJukeboxDynamicKids = null;
         backupScrollStaticKids  = null;
         backupScrollDynamicKids = null;
+        iconItemMap.clear();
     }
 }
