@@ -2,7 +2,7 @@
 
 ## Overview
 
-**ChanceMan** is a RuneLite plugin that locks tradeable items until they are unlocked by a random roll. Designed for players who enjoy adding extra randomness or progression to their gameplay, ChanceMan provides a unique system for “earning” items through luck. Items become accessible only after you roll to unlock them, with progress saved per player across sessions.
+**Chance Man** is a RuneLite plugin that locks tradeable items until they are unlocked by a random roll. Designed for players who enjoy adding extra randomness or progression to their gameplay, Chance Man provides a unique system for “earning” items through luck. Items become accessible only after you roll to unlock them, with progress saved per player across sessions.
 
 ## Features
 
@@ -20,14 +20,36 @@
     - Automatically rolls when you encounter locked items on the ground or receive them in your inventory (e.g., quest rewards).
     - Rolls each item only once, so repeated drops of the same item type won’t trigger multiple rolls.
 
+- **Show Drops Menu**
+    - Right-click an NPC and choose **Show Drops** to fetch its drop table from the wiki.
+    - The Music tab displays icons and a progress bar for the NPC's drops, and hovering an icon shows its name.
+
 - **Rolled & Unlocked Panels**
     - A **Rolled Items** section logs every item that has triggered a roll.
     - An **Unlocked Items** section shows which items have been successfully unlocked.
     - Both panels maintain descending order so the most recent items appear at the top.
+    - A search bar lets you quickly find items.
+    - The 🔄 button swaps between Rolled and Unlocked views.
+    - Filter toggles show only unlocked‑not‑rolled or both unlocked‑and‑rolled items.
+    - The Discord icon links to the community server for help and discussion and good vibes.
 
 - **Persistence**
     - Each player’s rolled/unlocked data is stored locally in JSON files, ensuring you don’t lose progress between sessions.
     - Data is automatically saved and loaded for each character name.
+
+- **Grand Exchange Search Filtering**
+    - Locked items are hidden in GE search results and dimmed until you unlock them
+
+## Configuration
+
+Open RuneLite’s plugin settings and select **ChanceMan** to adjust these options:
+
+- **Free To Play Mode** – Only roll items available to F2P players.
+- **Include F2P trade-only items** – With F2P mode enabled, also roll items that normally require trading to obtain.
+- **Roll Item Sets** – Include item set pieces in the pool of rollable items.
+- **Roll Flatpacks** – Let flatpacks appear in rolls.
+- **Weapon Poison Unlock Requirements** – Require the base weapon and poison to be unlocked before poisoned variants can roll.
+- **Enable Roll Sounds** – Play sound effects during roll animations.
 
 ## Usage
 
