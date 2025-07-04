@@ -55,19 +55,10 @@ public class Restrictions
 	public static final int SPELL_REQUIREMENT_OVERLAY_NORMAL = 14287051;
 	public static final int AUTOCAST_REQUIREMENT_OVERLAY_NORMAL = 13172738;
 
-	private static final HashMap<Integer, SkillOp> ITEM_TO_OP = new HashMap<>();
-	static
-	{
-		for (SkillItem skillItem : SkillItem.values())
-		{
-			ITEM_TO_OP.put(skillItem.getId(), skillItem.getSkillOp());
-		}
-	}
-
 	@Inject private ChanceManPlugin plugin;
 	@Inject private Client client;
 	@Inject private UnlockedItemsManager unlockedItemsManager;
-	private final HashSet<SkillOp> enabledSkillOps = new HashSet<>();
+	private final Set<SkillOp> enabledSkillOps = EnumSet.noneOf(SkillOp.class);
 	private final HashSet<Integer> availableRunes = new HashSet<>();
 
 	@Subscribe
@@ -84,9 +75,17 @@ public class Restrictions
 		{
 			Arrays.stream(equippedItems.getItems()).forEach(item -> {
 				int id = item.getId();
+				SkillItem skillItem = SkillItem.fromId(id);
+				if (skillItem != null && !skillItem.isRequiresUnlock())
+				{
+					enabledSkillOps.add(skillItem.getSkillOp());
+					return;
+				}
+
 				if (!plugin.isInPlay(id) || !unlockedItemsManager.isUnlocked(id)) return;
-				if (RuneProvider.isEquppedProvider(id)) availableRunes.addAll(RuneProvider.getProvidedRunes(id));
-				if (SkillItem.isSkillItem(id)) enabledSkillOps.add(ITEM_TO_OP.get(id));
+				if (RuneProvider.isEquppedProvider(id))
+					availableRunes.addAll(RuneProvider.getProvidedRunes(id));
+				if (skillItem != null) enabledSkillOps.add(skillItem.getSkillOp());
 			});
 		}
 
@@ -94,9 +93,17 @@ public class Restrictions
 		{
 			Arrays.stream(inventoryItems.getItems()).forEach(item -> {
 				int id = item.getId();
+				SkillItem skillItem = SkillItem.fromId(id);
+				if (skillItem != null && !skillItem.isRequiresUnlock())
+				{
+					enabledSkillOps.add(skillItem.getSkillOp());
+					return;
+				}
+
 				if (!plugin.isInPlay(id) || !unlockedItemsManager.isUnlocked(id)) return;
-				if (RuneProvider.isInvProvider(id)) availableRunes.addAll(RuneProvider.getProvidedRunes(id));
-				if (SkillItem.isSkillItem(id)) enabledSkillOps.add(ITEM_TO_OP.get(id));
+				if (RuneProvider.isInvProvider(id))
+					availableRunes.addAll(RuneProvider.getProvidedRunes(id));
+				if (skillItem != null) enabledSkillOps.add(skillItem.getSkillOp());
 			});
 		}
 

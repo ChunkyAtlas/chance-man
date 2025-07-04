@@ -10,8 +10,7 @@ public enum SkillOp
 {
 	CHOP_DOWN("Chop down"),
 	MINE("Mine"),
-	SMALL_NET("Small Net"),
-	BIG_NET("Big Net"),
+	NET("Net"),
 	CAGE("Cage"),
 	BAIT("Bait"),
 	LURE("Lure"),

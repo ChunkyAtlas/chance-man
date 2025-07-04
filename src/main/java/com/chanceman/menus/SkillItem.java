@@ -1,8 +1,10 @@
 package com.chanceman.menus;
 
 import lombok.Getter;
+import net.runelite.api.gameval.ItemID;
 
 import java.util.HashSet;
+import java.util.HashMap;
 
 @Getter
 public enum SkillItem
@@ -40,8 +42,8 @@ public enum SkillItem
 	GILDED_PICKAXE(23276, SkillOp.MINE),
 	THIRD_AGE_PICKAXE(20014, SkillOp.MINE),
 
-	SMALL_FISHING_NET(303, SkillOp.SMALL_NET),
-	BIG_FISHING_NET(305, SkillOp.BIG_NET),
+	SMALL_FISHING_NET(303, SkillOp.NET),
+	BIG_FISHING_NET(305, SkillOp.NET),
 	LOBSTER_POT(301, SkillOp.CAGE),
 	FISHING_BAIT(313, SkillOp.BAIT),
 	FLY_FISHING_ROD(309, SkillOp.LURE),
@@ -90,15 +92,37 @@ public enum SkillItem
 	UNFIRED_POT_LID(4438, SkillOp.FIRE),
 
 	RUNE_ESSENCE(1436, SkillOp.CRAFT_RUNE),
-	PURE_ESSENCE(7936, SkillOp.CRAFT_RUNE);
+	PURE_ESSENCE(7936, SkillOp.CRAFT_RUNE),
+
+	//Blackjacks
+	OAK_BLACKJACK_O(6408, SkillOp.LURE),
+	OAK_BLACKJACK_D(6410, SkillOp.LURE),
+	WILLOW_BLACKJACK(4600, SkillOp.LURE),
+	WILLOW_BLACKJACK_O(6412, SkillOp.LURE),
+	WILLOW_BLACKJACK_D(6414, SkillOp.LURE),
+	MAPLE_BLACKJACK(6416, SkillOp.LURE),
+	MAPLE_BLACKJACK_O(6418, SkillOp.LURE),
+	MAPLE_BLACKJACK_D(6420, SkillOp.LURE),
+
+	// Untradeables that conflict
+	OAK_BLACKJACK(4599, SkillOp.LURE, false),
+	RED_VINE_WORMS(25, SkillOp.BAIT, false),
+	BOBS_NET(6209, SkillOp.NET, false);
 
 	private final int id;
 	private final SkillOp option;
+	private final boolean requiresUnlock;
 
 	SkillItem(int id, SkillOp option)
 	{
+		this(id, option, true);
+	}
+
+	SkillItem(int id, SkillOp option, boolean requiresUnlock)
+	{
 		this.id = id;
 		this.option = option;
+		this.requiresUnlock = requiresUnlock;
 	}
 
 	public SkillOp getSkillOp()
@@ -107,17 +131,24 @@ public enum SkillItem
 	}
 
 	private static final HashSet<Integer> ALL_SKILL_ITEMS = new HashSet<>();
+	private static final HashMap<Integer, SkillItem> ID_TO_ITEM = new HashMap<>();
 
 	static
 	{
 		for (SkillItem skillItem : SkillItem.values())
 		{
 			ALL_SKILL_ITEMS.add(skillItem.getId());
+			ID_TO_ITEM.put(skillItem.getId(), skillItem);
 		}
 	}
 
 	public static boolean isSkillItem(int id)
 	{
 		return ALL_SKILL_ITEMS.contains(id);
+	}
+
+	public static SkillItem fromId(int id)
+	{
+		return ID_TO_ITEM.get(id);
 	}
 }
