@@ -84,14 +84,25 @@ public class DropsMenuListener
                 attackIdx - 1,
                 attackEntry
         );
-        showDrops.onClick(me ->
-                dropCache.get(id, name, level)
-                        .thenAccept(dropData ->
-                                clientThread.invokeLater(() -> widgetController.override(dropData))
-                        )
-        );
+        showDrops.onClick(me -> fetchAndDisplayDrops(id, name, level, 1));
 
         entries.add(attackIdx + 1, showDrops);
         event.setMenuEntries(entries.toArray(new MenuEntry[0]));
+    }
+    private void fetchAndDisplayDrops(int id, String name, int level, int attemptsLeft)
+    {
+        dropCache.get(id, name, level)
+                .whenComplete((dropData, ex) ->
+                {
+                    if (dropData != null && ex == null)
+                    {
+                        clientThread.invokeLater(() -> widgetController.override(dropData));
+                        return;
+                    }
+
+                    if (attemptsLeft > 0) fetchAndDisplayDrops(id, name, level, attemptsLeft - 1);
+                    else log.error("Failed to fetch drop data for {}", name, ex);
+
+                });
     }
 }

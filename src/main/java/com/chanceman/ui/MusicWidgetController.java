@@ -63,6 +63,7 @@ public class MusicWidgetController
 
     public void override(NpcDropData dropData)
     {
+        if (dropData == null) return;
         this.currentDrops = dropData;
         this.overrideActive = true;
         applyOverride(dropData);
