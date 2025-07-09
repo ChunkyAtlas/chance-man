@@ -62,4 +62,12 @@ public interface ChanceManConfig extends Config
             position = 6
     )
     default boolean enableRollSounds() { return true; }
+
+    @ConfigItem(
+            keyName = "requireRolledUnlockedForGe",
+            name = "GE Requires Rolled and Unlocked",
+            description = "Only allow Grand Exchange purchases once items are both rolled and unlocked.",
+            position = 7
+    )
+    default boolean requireRolledUnlockedForGe() { return true; }
 }

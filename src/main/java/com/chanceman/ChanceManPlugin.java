@@ -281,9 +281,14 @@ public class ChanceManPlugin extends Plugin
             return;
         }
         Set<Integer> unlocked = unlockedItemsManager.getUnlockedItems();
+        Set<Integer> rolled = rolledItemsManager.getRolledItems();
+        boolean requireRolled = config.requireRolledUnlockedForGe();
         for (int i = 0; i < children.length; i += 3) {
             int offerItemId = children[i + 2].getItemId();
-            if (!unlocked.contains(offerItemId)) {
+            boolean isUnlocked = unlocked.contains(offerItemId);
+            boolean isRolled = rolled.contains(offerItemId);
+            boolean hide = requireRolled ? !(isUnlocked && isRolled) : !isUnlocked;
+            if (hide) {
                 children[i].setHidden(true);
                 children[i + 1].setOpacity(70);
                 children[i + 2].setOpacity(70);
