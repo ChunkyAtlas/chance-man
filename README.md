@@ -50,6 +50,7 @@ Open RuneLite’s plugin settings and select **ChanceMan** to adjust these optio
 - **Roll Flatpacks** – Let flatpacks appear in rolls.
 - **Weapon Poison Unlock Requirements** – Require the base weapon and poison to be unlocked before poisoned variants can roll.
 - **Enable Roll Sounds** – Play sound effects during roll animations.
+- **GE Purchases Require Rolls** – Items appear purchasable on the Grand Exchange only after they have been rolled and unlocked.
 
 ## Usage
 
