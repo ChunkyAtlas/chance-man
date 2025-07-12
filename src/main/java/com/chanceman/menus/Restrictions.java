@@ -82,8 +82,8 @@ public class Restrictions
 					return;
 				}
 
-				if (!plugin.isInPlay(id) || !unlockedItemsManager.isUnlocked(id)) return;
-				if (RuneProvider.isEquppedProvider(id))
+				if (shouldSkipItem(id)) return;
+				if (RuneProvider.isEquippedProvider(id))
 					availableRunes.addAll(RuneProvider.getProvidedRunes(id));
 				if (skillItem != null) enabledSkillOps.add(skillItem.getSkillOp());
 			});
@@ -100,7 +100,7 @@ public class Restrictions
 					return;
 				}
 
-				if (!plugin.isInPlay(id) || !unlockedItemsManager.isUnlocked(id)) return;
+				if (shouldSkipItem(id)) return;
 				if (RuneProvider.isInvProvider(id))
 					availableRunes.addAll(RuneProvider.getProvidedRunes(id));
 				if (skillItem != null) enabledSkillOps.add(skillItem.getSkillOp());
@@ -118,7 +118,7 @@ public class Restrictions
 			}
 
 			int runeId = pouchEnum.getIntValue(typeIdx);
-			if (!plugin.isInPlay(runeId) || !unlockedItemsManager.isUnlocked(runeId))
+			if (shouldSkipItem(runeId))
 			{
 				continue;
 			}
@@ -134,6 +134,16 @@ public class Restrictions
 	{
 		SkillOp op = SkillOp.fromString(option);
 		return enabledSkillOps.contains(op);
+	}
+
+	private boolean shouldSkipItem(int id)
+	{
+		if (!plugin.isInPlay(id))
+		{
+			return !(RuneProvider.isEquippedProvider(id)
+					|| RuneProvider.isInvProvider(id));
+		}
+		return !unlockedItemsManager.isUnlocked(id);
 	}
 
 	public boolean isSpellOpEnabled(String spellName)

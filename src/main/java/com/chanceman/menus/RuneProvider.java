@@ -113,7 +113,7 @@ public enum RuneProvider
 		}
 	}
 
-	public static boolean isEquppedProvider(int id) { return EQUIPPED_PROVIDERS.contains(id); }
+	public static boolean isEquippedProvider(int id) { return EQUIPPED_PROVIDERS.contains(id); }
 	public static boolean isInvProvider(int id) { return INV_PROVIDERS.contains(id); }
 	public static HashSet<Integer> getProvidedRunes(int id) { return PROVIDER_TO_PROVIDED.get(id); }
 }
