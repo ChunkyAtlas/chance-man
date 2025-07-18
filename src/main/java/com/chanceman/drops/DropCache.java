@@ -12,7 +12,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Stream;
 
 @Slf4j
 @Singleton
@@ -21,6 +24,7 @@ public class DropCache
     private final Gson gson;
     private final AccountManager accountManager;
     private final DropFetcher dropFetcher;
+    private static final Duration MAX_AGE = Duration.ofDays(7);
 
     @Inject
     public DropCache(Gson gson, AccountManager accountManager, DropFetcher dropFetcher)
@@ -122,5 +126,52 @@ public class DropCache
 
         String fn = npcId + "_" + safeName + "_" + level + ".json";
         return dir.resolve(fn);
+    }
+
+    /**
+     * Deletes cached drop table files older than {@link #MAX_AGE}.
+     */
+    public void pruneOldCaches()
+    {
+        String player = accountManager.getPlayerName();
+        if (player == null)
+        {
+            return;
+        }
+
+        Path dir = RUNELITE_DIR.toPath()
+                .resolve("chanceman")
+                .resolve(player)
+                .resolve("drops");
+
+        if (!Files.exists(dir))
+        {
+            return;
+        }
+
+        Instant cutoff = Instant.now().minus(MAX_AGE);
+        try (Stream<Path> files = Files.list(dir))
+        {
+            files.filter(Files::isRegularFile)
+                    .forEach(p ->
+                    {
+                        try
+                        {
+                            Instant mod = Files.getLastModifiedTime(p).toInstant();
+                            if (mod.isBefore(cutoff))
+                            {
+                                Files.deleteIfExists(p);
+                            }
+                        }
+                        catch (IOException ex)
+                        {
+                            log.debug("Failed to delete old drop cache {}", p, ex);
+                        }
+                    });
+        }
+        catch (IOException ex)
+        {
+            log.debug("Error pruning drop cache directory {}", dir, ex);
+        }
     }
 }

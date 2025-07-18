@@ -4,6 +4,7 @@ package com.chanceman;
 import com.chanceman.account.AccountChanged;
 import com.chanceman.account.AccountManager;
 import com.chanceman.drops.DropFetcher;
+import com.chanceman.drops.DropCache;
 import com.chanceman.filters.EnsouledHeadMapping;
 import com.chanceman.menus.ActionHandler;
 import com.chanceman.filters.ItemsFilter;
@@ -81,6 +82,7 @@ public class ChanceManPlugin extends Plugin
     private ItemsFilter itemsFilter;
     @Inject private DropsTabUI dropsTabUI;
     @Inject private DropFetcher dropFetcher;
+    @Inject private DropCache dropCache;
     @Inject private MusicWidgetController musicWidgetController;
 
     private ChanceManPanel chanceManPanel;
@@ -244,6 +246,7 @@ public class ChanceManPlugin extends Plugin
     private void onAccountChanged(AccountChanged event)
     {
         if (!featuresActive) return;
+        dropCache.pruneOldCaches();
         unlockedItemsManager.loadUnlockedItems();
         rolledItemsManager.loadRolledItems();
         if (chanceManPanel != null)
