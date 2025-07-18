@@ -158,7 +158,7 @@ public class ChanceManPlugin extends Plugin
         dropsTabUI.shutDown();
         eventBus.unregister(accountManager);
         getInjector().getInstance(ActionHandler.class).shutDown();
-        musicWidgetController.restore();
+        clientThread.invokeLater(musicWidgetController::restore);
 
         if (clientToolbar != null && navButton != null)
         {
