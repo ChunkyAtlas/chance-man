@@ -31,7 +31,7 @@ public class DropFetcher
     private final OkHttpClient httpClient;
     private final ItemManager itemManager;
     private final ClientThread clientThread;
-    private final ExecutorService fetchExecutor;
+    private ExecutorService fetchExecutor;
 
     @Inject
     public DropFetcher(OkHttpClient httpClient, ItemManager itemManager, ClientThread clientThread)
@@ -39,10 +39,7 @@ public class DropFetcher
         this.httpClient = httpClient;
         this.itemManager  = itemManager;
         this.clientThread = clientThread;
-        this.fetchExecutor = Executors.newFixedThreadPool(
-                2,
-                new ThreadFactoryBuilder().setNameFormat("dropfetch-%d").build()
-        );
+        startUp();
     }
 
     /**
@@ -165,10 +162,28 @@ public class DropFetcher
     }
 
     /**
+     * Creates the fetch executor if it is missing or has been shut down.
+     */
+    public void startUp()
+    {
+        if (fetchExecutor == null || fetchExecutor.isShutdown() || fetchExecutor.isTerminated())
+        {
+            fetchExecutor = Executors.newFixedThreadPool(
+                    2,
+                    new ThreadFactoryBuilder().setNameFormat("dropfetch-%d").build()
+            );
+        }
+    }
+
+    /**
      *  shut down the executor
      */
     public void shutdown()
     {
-        fetchExecutor.shutdownNow();
+        if (fetchExecutor != null)
+        {
+            fetchExecutor.shutdownNow();
+            fetchExecutor = null;
+        }
     }
 }

@@ -117,6 +117,7 @@ public class ChanceManPlugin extends Plugin
         featuresActive = true;
 
         getInjector().getInstance(ActionHandler.class).startUp();
+        dropFetcher.startUp();
         eventBus.register(accountManager);
         overlayManager.add(chanceManOverlay);
         overlayManager.add(dropsTooltipOverlay);
