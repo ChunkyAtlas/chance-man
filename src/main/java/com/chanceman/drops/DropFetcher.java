@@ -122,7 +122,10 @@ public class DropFetcher
             List<DropItem> items = table.select("tbody tr").stream()
                     .map(row -> row.select("td"))
                     .filter(td -> td.size() >= 6)
-                    .map(td -> new DropItem(0, td.get(1).text().replace("(m)", "").trim()))
+                    .map(td -> new DropItem(
+                            0,
+                            td.get(1).text().replace("(m)", "").trim(),
+                            td.get(3).text().trim()))
                     .collect(Collectors.toList());
 
             if (!items.isEmpty())

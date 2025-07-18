@@ -9,10 +9,11 @@ import java.util.Map;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 
+import com.chanceman.drops.DropItem;
+
 import net.runelite.api.Client;
 import net.runelite.api.Point;
 import net.runelite.api.widgets.Widget;
-import net.runelite.client.game.ItemManager;
 import net.runelite.client.ui.overlay.Overlay;
 import net.runelite.client.ui.overlay.OverlayLayer;
 import net.runelite.client.ui.overlay.OverlayPosition;
@@ -25,18 +26,15 @@ import net.runelite.client.ui.overlay.OverlayPosition;
 public class DropsTooltipOverlay extends Overlay
 {
     private final Client client;
-    private final ItemManager itemManager;
     private final MusicWidgetController widgetController;
 
     @Inject
     public DropsTooltipOverlay(
             Client client,
-            ItemManager itemManager,
             MusicWidgetController widgetController
     )
     {
         this.client = client;
-        this.itemManager = itemManager;
         this.widgetController = widgetController;
         setPosition(OverlayPosition.DYNAMIC);
         setLayer(OverlayLayer.ABOVE_WIDGETS);
@@ -48,51 +46,70 @@ public class DropsTooltipOverlay extends Overlay
         if (!widgetController.isOverrideActive()) {return null;}
 
         Point mouse = client.getMouseCanvasPosition();
-        for (Map.Entry<Widget, Integer> entry : widgetController.getIconItemMap().entrySet())
+        for (Map.Entry<Widget, DropItem> entry : widgetController.getIconItemMap().entrySet())
         {
             Widget w = entry.getKey();
             if (w == null || w.isHidden()) {continue;}
             Rectangle bounds = w.getBounds();
             if (bounds.contains(mouse.getX(), mouse.getY()))
             {
-                String name = itemManager
-                        .getItemComposition(entry.getValue())
-                        .getName();
-                drawTooltip(graphics, name, mouse);
+                DropItem drop = entry.getValue();
+                drawTooltip(graphics, drop.getName(), drop.getOneOverRarity(), mouse);
                 break;
             }
         }
         return null;
     }
 
-    private void drawTooltip(Graphics2D g, String text, Point mouse)
+    private void drawTooltip(Graphics2D g, String name, String rarity, Point mouse)
     {
         FontMetrics fm = g.getFontMetrics();
         int padding = 4;
-        int textW   = fm.stringWidth(text);
-        int textH   = fm.getHeight();
+        int gap = 2;
+        int lineH  = fm.getHeight();
 
-        int boxW = textW + padding * 2;
-        int boxH = textH + padding * 2;
+        String rateText = "Rate: " + rarity;
+
+        int nameW = fm.stringWidth(name);
+        int rateW = fm.stringWidth(rateText);
+
+        int nameBoxW = nameW + padding * 2;
+        int rateBoxW = rateW + padding * 2;
+        int boxH     = lineH + padding * 2;
+        int totalH   = boxH * 2 + gap;
+        int clampW   = Math.max(nameBoxW, rateBoxW);
 
         int x = mouse.getX() + 10;
         int y = mouse.getY() - 10;
 
-        // clamp to game canvas
         Rectangle clip = g.getClipBounds();
-        x = Math.max(clip.x, Math.min(x, clip.x + clip.width  - boxW));
-        y = Math.max(clip.y + boxH, Math.min(y, clip.y + clip.height));
+        x = Math.max(clip.x, Math.min(x, clip.x + clip.width  - clampW));
+        y = Math.max(clip.y + totalH, Math.min(y, clip.y + clip.height));
 
-        // fill background (more transparent)
-        g.setColor(new Color(0, 0, 0, 100));
-        g.fillRect(x, y - boxH, boxW, boxH);
+        int nameTop = y - totalH;
+        drawBox(g, x, nameTop, nameBoxW, boxH);
+        drawBox(g, x, y - boxH, rateBoxW, boxH);
 
-        // draw a slightly darker border
-        g.setColor(new Color(50, 50, 50, 200));
-        g.drawRect(x, y - boxH, boxW, boxH);
-
-        // draw the text
         g.setColor(Color.WHITE);
-        g.drawString(text, x + padding, y - padding);
+        int base = nameTop + padding + fm.getAscent();
+        g.drawString(name, x + padding, base);
+
+        int rateBase = y - boxH + padding + fm.getAscent();
+        String prefix = "Rate: ";
+        int prefixW = fm.stringWidth(prefix);
+
+        g.setColor(Color.WHITE);
+        g.drawString(prefix, x + padding, rateBase);
+
+        g.setColor(Color.ORANGE);
+        g.drawString(rarity, x + padding + prefixW, rateBase);
+    }
+
+    private void drawBox(Graphics2D g, int x, int y, int w, int h)
+    {
+        g.setColor(new Color(0, 0, 0, 100));
+        g.fillRect(x, y, w, h);
+        g.setColor(new Color(50, 50, 50, 200));
+        g.drawRect(x, y, w, h);
     }
 }

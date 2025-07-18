@@ -32,7 +32,7 @@ public class MusicWidgetController
     private List<Widget> backupScrollStaticKids = null;
     private List<Widget> backupScrollDynamicKids = null;
     private String originalTitleText = null;
-    @Getter private final Map<Widget, Integer> iconItemMap = new HashMap<>();
+    @Getter private final Map<Widget, DropItem> iconItemMap = new HashMap<>();
     @Getter private boolean overrideActive = false;
 
     @Inject
@@ -257,7 +257,7 @@ public class MusicWidgetController
             icon.setOpacity(rolledIds.contains(itemId) ? 0 : 150);
             icon.revalidate();
 
-            iconItemMap.put(icon, itemId);
+            iconItemMap.put(icon, d);
 
             displayIndex++;
         }
