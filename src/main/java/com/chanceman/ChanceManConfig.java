@@ -72,11 +72,23 @@ public interface ChanceManConfig extends Config
     )
     default boolean requireRolledUnlockedForGe() { return true; }
 
+
+    @ConfigItem(
+            keyName = "sortDropsByRarity",
+            name = "Sort Drops by Rarity",
+            description = "Order drops in the Show Drops menu by rarity instead of item ID.",
+            position = 8
+    )
+    default boolean sortDropsByRarity()
+    {
+        return true;
+    }
+
     @ConfigItem(
             keyName = "unlockedItemColor",
             name = "Unlocked Item Color",
             description = "Color of the unlocked item name in chat messages.",
-            position = 8
+            position = 9
     )
     default Color unlockedItemColor()
     {
@@ -87,7 +99,7 @@ public interface ChanceManConfig extends Config
             keyName = "rolledItemColor",
             name = "Rolled Item Color",
             description = "Color of the item used to unlock another item.",
-            position = 9
+            position = 10
     )
     default Color rolledItemColor()
     {
