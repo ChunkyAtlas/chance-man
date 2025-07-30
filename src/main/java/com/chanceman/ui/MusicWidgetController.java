@@ -93,6 +93,22 @@ public class MusicWidgetController
         }
 
         List<DropItem> drops = dropData.getDropTableSections().stream()
+                .filter(sec -> {
+                    String h = sec.getHeader();
+                    if (h == null) return true;
+                    String lower = h.toLowerCase();
+
+                    //wiki may combine these sections under "Rare and Gem drop table"
+                    if (lower.contains("rare and gem drop table"))
+                    {
+                        return config.showRareDropTable() && config.showGemDropTable();
+                    }
+
+                    if (!config.showRareDropTable() && lower.contains("rare drop table")) return false;
+                    if (!config.showGemDropTable() && lower.contains("gem drop table")) return false;
+
+                    return true;
+                })
                 .flatMap(sec -> sec.getItems().stream())
                 .collect(Collectors.toList());
         drops = WidgetUtils.dedupeAndSort(drops, config.sortDropsByRarity());

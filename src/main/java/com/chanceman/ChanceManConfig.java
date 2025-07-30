@@ -85,10 +85,26 @@ public interface ChanceManConfig extends Config
     }
 
     @ConfigItem(
+            keyName = "showRareDropTable",
+            name = "Show Rare Drop Table",
+            description = "Include rare drop table items in the Show Drops menu.",
+            position = 9
+    )
+    default boolean showRareDropTable() { return true; }
+
+    @ConfigItem(
+            keyName = "showGemDropTable",
+            name = "Show Gem Drop Table",
+            description = "Include gem drop table items in the Show Drops menu.",
+            position = 10
+    )
+    default boolean showGemDropTable() { return true; }
+
+    @ConfigItem(
             keyName = "unlockedItemColor",
             name = "Unlocked Item Color",
             description = "Color of the unlocked item name in chat messages.",
-            position = 9
+            position = 11
     )
     default Color unlockedItemColor()
     {
@@ -99,7 +115,7 @@ public interface ChanceManConfig extends Config
             keyName = "rolledItemColor",
             name = "Rolled Item Color",
             description = "Color of the item used to unlock another item.",
-            position = 10
+            position = 12
     )
     default Color rolledItemColor()
     {

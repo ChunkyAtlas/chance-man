@@ -51,6 +51,12 @@ Open RuneLite’s plugin settings and select **ChanceMan** to adjust these optio
 - **Weapon Poison Unlock Requirements** – Require the base weapon and poison to be unlocked before poisoned variants can roll.
 - **Enable Roll Sounds** – Play sound effects during roll animations.
 - **GE Purchases Require Rolls** – Items appear purchasable on the Grand Exchange only after they have been rolled and unlocked.
+- **Unlocked Item Color** – Chat color for newly unlocked item names.
+- **Rolled Item Color** – Chat color for the item that triggered the unlock.
+- **Sort Drops by Rarity** – Order items in the Show Drops menu by rarity instead of item ID.
+- **Show Rare Drop Table** – Toggle to display items from the rare drop table in the **Show Drops** menu.
+- **Show Gem Drop Table** – Toggle to display items from the gem drop table in the **Show Drops** menu.
+  Changing either option will clear cached drop data so updated tables are fetched.
 
 ## Usage
 

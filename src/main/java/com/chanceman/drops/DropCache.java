@@ -174,4 +174,40 @@ public class DropCache
             log.debug("Error pruning drop cache directory {}", dir, ex);
         }
     }
+
+    /**
+     * Deletes all cached drop table files for the current player.
+     */
+    public void clearAllCaches()
+    {
+        String player = accountManager.getPlayerName();
+        if (player == null) return;
+
+        Path dir = RUNELITE_DIR.toPath()
+                .resolve("chanceman")
+                .resolve(player)
+                .resolve("drops");
+
+        if (!Files.exists(dir)) return;
+
+        try (Stream<Path> files = Files.list(dir))
+        {
+            files.filter(Files::isRegularFile)
+                    .forEach(p ->
+                    {
+                        try
+                        {
+                            Files.deleteIfExists(p);
+                        }
+                        catch (IOException ex)
+                        {
+                            log.debug("Failed to delete drop cache {}", p, ex);
+                        }
+                    });
+        }
+        catch (IOException ex)
+        {
+            log.debug("Error clearing drop cache directory {}", dir, ex);
+        }
+    }
 }

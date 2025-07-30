@@ -42,7 +42,7 @@ import java.util.concurrent.Executors;
 @PluginDescriptor(
         name = "ChanceMan",
         description = "Locks tradeable items until unlocked via a random roll.",
-        tags = {"osrs", "chance", "roll", "lock", "unlock"}
+        tags = {"chance", "roll", "lock", "unlock", "luck", "game of chance", "goc"}
 )
 public class ChanceManPlugin extends Plugin
 {
@@ -238,6 +238,10 @@ public class ChanceManPlugin extends Plugin
             case "enableItemSets":
             case "requireWeaponPoison":
                 refreshTradeableItems();
+                break;
+            case "showRareDropTable":
+            case "showGemDropTable":
+                dropCache.clearAllCaches();
                 break;
         }
     }

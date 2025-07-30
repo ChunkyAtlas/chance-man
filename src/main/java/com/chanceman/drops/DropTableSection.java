@@ -9,10 +9,12 @@ import java.util.List;
 @Getter
 public class DropTableSection
 {
+    private String header;
     private List<DropItem> items;
 
     public DropTableSection(String header, List<DropItem> items)
     {
+        this.header = header;
         this.items = items;
     }
 
