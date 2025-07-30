@@ -66,12 +66,16 @@ public final class WidgetUtils
     }
 
     /**
-     * Deduplicates a list of DropItems by item ID and sorts them ascending.
+     * Deduplicates a list of DropItems by item ID and optionally sorts them by rarity.
      *
-     * @param drops The list of DropItems to process.
+     * <p>When sorting by rarity, the resulting list is ordered from most common
+     * to rarest. Unknown rarities are treated as the rarest drops.</p>
+     *
+     * @param drops        The list of DropItems to process.
+     * @param sortByRarity If {@code true}, sort by rarity; otherwise sort by item ID.
      * @return A new sorted, deduplicated list.
      */
-    public static List<DropItem> dedupeAndSort(List<DropItem> drops)
+    public static List<DropItem> dedupeAndSort(List<DropItem> drops, boolean sortByRarity)
     {
         return drops.stream()
                 .filter(d -> d.getItemId() > 0)
@@ -82,7 +86,10 @@ public final class WidgetUtils
                         LinkedHashMap::new
                 ))
                 .values().stream()
-                .sorted(Comparator.comparingInt(DropItem::getItemId))
+                .sorted(sortByRarity
+                        ? Comparator.comparingDouble(DropItem::getRarityValue)
+                        .thenComparingInt(DropItem::getItemId)
+                        : Comparator.comparingInt(DropItem::getItemId))
                 .collect(Collectors.toList());
     }
 }

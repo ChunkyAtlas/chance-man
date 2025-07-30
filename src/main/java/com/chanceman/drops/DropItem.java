@@ -21,6 +21,7 @@ public class DropItem
     private static final Pattern FRAC   = Pattern.compile("(\\d+(?:\\.\\d+)?)\\s*/\\s*(\\d+(?:\\.\\d+)?)");
     private static final Pattern PAREN  = Pattern.compile("\\s*\\([^)]*\\)$", Pattern.UNICODE_CASE);
     private static final Pattern IN_SYNT = Pattern.compile("\\bin\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern BRACKETS = Pattern.compile("\\[[^\\]]*\\]");
 
     public DropItem(int itemId, String name, String rarity)
     {
@@ -42,8 +43,46 @@ public class DropItem
                 .collect(Collectors.joining("; "));
     }
 
+    /**
+     * Attempt to parse the rarity into a numeric one-over value.
+     * <p>
+     * For example a rarity of "1/128" will return {@code 128}. Unknown or
+     * non-numeric rarities return {@link Double#POSITIVE_INFINITY} so they are
+     * treated as the rarest drops when sorting.
+     */
+    public double getRarityValue()
+    {
+        String oneOver = getOneOverRarity();
+        if (oneOver.isEmpty())
+        {
+            return Double.POSITIVE_INFINITY;
+        }
+
+        Matcher m = Pattern.compile("1/(\\d+(?:\\.\\d+)?)").matcher(oneOver);
+        if (m.find())
+        {
+            try
+            {
+                return Double.parseDouble(m.group(1));
+            }
+            catch (NumberFormatException ex)
+            {
+                return Double.POSITIVE_INFINITY;
+            }
+        }
+
+        if (oneOver.equalsIgnoreCase("Always"))
+        {
+            return 0d;
+        }
+
+        return Double.POSITIVE_INFINITY;
+    }
+
     private String normalizeSegment(String raw) {
-        String cleaned = raw
+        String cleaned = raw;
+        cleaned = BRACKETS.matcher(cleaned).replaceAll("");
+        cleaned = cleaned
                 .replace("×", "x")
                 .replace(",", "")
                 .replace("≈", "")

@@ -3,6 +3,7 @@ package com.chanceman.ui;
 import com.chanceman.drops.NpcDropData;
 import com.chanceman.drops.DropItem;
 import com.chanceman.managers.RolledItemsManager;
+import com.chanceman.ChanceManConfig;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import javax.inject.Inject;
@@ -25,6 +26,7 @@ public class MusicWidgetController
     private final RolledItemsManager rolledItemsManager;
     private final SpriteOverrideManager spriteOverrideManager;
     private final ItemSpriteCache itemSpriteCache;
+    private final ChanceManConfig config;
 
     private NpcDropData currentDrops = null;
     private List<Widget> backupJukeboxStaticKids = null;
@@ -41,7 +43,8 @@ public class MusicWidgetController
             ClientThread clientThread,
             RolledItemsManager rolledItemsManager,
             SpriteOverrideManager spriteOverrideManager,
-            ItemSpriteCache itemSpriteCache
+            ItemSpriteCache itemSpriteCache,
+            ChanceManConfig config
     )
     {
         this.client = client;
@@ -49,6 +52,7 @@ public class MusicWidgetController
         this.rolledItemsManager = rolledItemsManager;
         this.spriteOverrideManager = spriteOverrideManager;
         this.itemSpriteCache = itemSpriteCache;
+        this.config = config;
     }
 
     public boolean hasData()
@@ -91,7 +95,7 @@ public class MusicWidgetController
         List<DropItem> drops = dropData.getDropTableSections().stream()
                 .flatMap(sec -> sec.getItems().stream())
                 .collect(Collectors.toList());
-        drops = WidgetUtils.dedupeAndSort(drops);
+        drops = WidgetUtils.dedupeAndSort(drops, config.sortDropsByRarity());
 
         Set<Integer> rolledIds = rolledItemsManager.getRolledItems();
         int totalDrops = drops.size();
