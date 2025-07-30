@@ -2,6 +2,7 @@ package com.chanceman.managers;
 
 import com.chanceman.ChanceManOverlay;
 import com.chanceman.ChanceManPanel;
+import com.chanceman.ChanceManConfig;
 import lombok.Getter;
 import lombok.Setter;
 import net.runelite.api.ChatMessageType;
@@ -9,6 +10,7 @@ import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.util.ColorUtil;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -30,6 +32,7 @@ public class RollAnimationManager
     @Inject private ClientThread clientThread;
     @Inject private UnlockedItemsManager unlockedManager;
     @Inject private ChanceManOverlay overlay;
+    @Inject private ChanceManConfig config;
     @Setter private ChanceManPanel chanceManPanel;
 
     @Setter private HashSet<Integer> allTradeableItems;
@@ -82,16 +85,17 @@ public class RollAnimationManager
         unlockedManager.unlockItem(finalRolledItem);
         final boolean wasManualRoll = isManualRoll();
         clientThread.invoke(() -> {
+            String unlockedTag = ColorUtil.wrapWithColorTag(getItemName(finalRolledItem), config.unlockedItemColor());
             String message;
             if (wasManualRoll)
             {
-                message = "Unlocked " + "<col=267567>" + getItemName(finalRolledItem) + "</col>" +
-                      " by" + "<col=ff0000> pressing a button</col>";
+                String pressTag = ColorUtil.wrapWithColorTag("pressing a button", config.rolledItemColor());
+                message = "Unlocked " + unlockedTag + " by " + pressTag;
             }
             else
             {
-                message = "Unlocked " + "<col=267567>" + getItemName(finalRolledItem) + "</col>"
-                        + " by rolling " + "<col=ff0000>" + getItemName(queuedItemId) + "</col>";
+                String rolledTag = ColorUtil.wrapWithColorTag(getItemName(queuedItemId), config.rolledItemColor());
+                message = "Unlocked " + unlockedTag + " by rolling " + rolledTag;
             }
             client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null);
             if (chanceManPanel != null) {

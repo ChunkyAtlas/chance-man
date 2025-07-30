@@ -3,6 +3,7 @@ package com.chanceman;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
+import java.awt.Color;
 
 @ConfigGroup("chanceman")
 public interface ChanceManConfig extends Config
@@ -70,4 +71,26 @@ public interface ChanceManConfig extends Config
             position = 7
     )
     default boolean requireRolledUnlockedForGe() { return true; }
+
+    @ConfigItem(
+            keyName = "unlockedItemColor",
+            name = "Unlocked Item Color",
+            description = "Color of the unlocked item name in chat messages.",
+            position = 8
+    )
+    default Color unlockedItemColor()
+    {
+        return Color.decode("#267567");
+    }
+
+    @ConfigItem(
+            keyName = "rolledItemColor",
+            name = "Rolled Item Color",
+            description = "Color of the item used to unlock another item.",
+            position = 9
+    )
+    default Color rolledItemColor()
+    {
+        return Color.decode("#ff0000");
+    }
 }
