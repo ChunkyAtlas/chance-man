@@ -1,26 +1,37 @@
 package com.chanceman.ui;
 
-import com.chanceman.drops.NpcDropData;
-import com.chanceman.drops.DropItem;
-import com.chanceman.managers.RolledItemsManager;
 import com.chanceman.ChanceManConfig;
-import lombok.Getter;
-import lombok.extern.slf4j.Slf4j;
-import javax.inject.Inject;
-import javax.inject.Singleton;
+import com.chanceman.drops.DropItem;
+import com.chanceman.drops.NpcDropData;
+import com.chanceman.managers.RolledItemsManager;
 import java.util.*;
 import java.util.stream.Collectors;
+import javax.inject.Inject;
+import javax.inject.Singleton;
+import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
-import net.runelite.client.callback.ClientThread;
+import net.runelite.api.ScriptEvent;
+import net.runelite.api.widgets.ItemQuantityMode;
+import net.runelite.api.widgets.JavaScriptCallback;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetType;
-import net.runelite.api.widgets.ItemQuantityMode;
+import net.runelite.client.callback.ClientThread;
 
 @Slf4j
 @Singleton
 public class MusicWidgetController
 {
     private static final int MUSIC_GROUP = 239;
+    private static final int ICON_SIZE = 32;
+    private static final int PADDING = 4;
+    private static final int COLUMNS = 4;
+    private static final int MARGIN_X = 8;
+    private static final int MARGIN_Y = 8;
+    private static final int BAR_HEIGHT = 15;
+    private static final float WIDTH_RATIO = 0.7f;
+    private static final int EYE_SIZE = 20;
+
     private final Client client;
     private final ClientThread clientThread;
     private final RolledItemsManager rolledItemsManager;
@@ -34,8 +45,9 @@ public class MusicWidgetController
     private List<Widget> backupScrollStaticKids = null;
     private List<Widget> backupScrollDynamicKids = null;
     private String originalTitleText = null;
-    @Getter private final Map<Widget, DropItem> iconItemMap = new HashMap<>();
+    @Getter private final Map<Widget, DropItem> iconItemMap = new LinkedHashMap<>();
     @Getter private boolean overrideActive = false;
+    private boolean hideRolledItems = false;
 
     @Inject
     public MusicWidgetController(
@@ -44,8 +56,7 @@ public class MusicWidgetController
             RolledItemsManager rolledItemsManager,
             SpriteOverrideManager spriteOverrideManager,
             ItemSpriteCache itemSpriteCache,
-            ChanceManConfig config
-    )
+            ChanceManConfig config)
     {
         this.client = client;
         this.clientThread = clientThread;
@@ -67,19 +78,289 @@ public class MusicWidgetController
 
     public void override(NpcDropData dropData)
     {
-        if (dropData == null) return;
-        this.currentDrops = dropData;
-        this.overrideActive = true;
-        applyOverride(dropData);
-        spriteOverrideManager.register();
+        if (dropData == null || overrideActive)
+        {
+            return;
+        }
+        currentDrops = dropData;
+        hideRolledItems = false;
+        overrideActive = true;
+        clientThread.invokeLater(() ->
+        {
+            applyOverride(dropData);
+            spriteOverrideManager.register();
+        });
     }
 
     public void restore()
     {
-        if (!overrideActive) return;
+        if (!overrideActive)
+        {
+            return;
+        }
         spriteOverrideManager.unregister();
         itemSpriteCache.clear();
-        revertOverride();
+        hideRolledItems = false;
+        clientThread.invokeLater(this::revertOverride);
+    }
+
+    private void updateIconsVisibilityAndLayout()
+    {
+        Set<Integer> rolledIds = rolledItemsManager.getRolledItems();
+        Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
+        Widget scrollbar = client.getWidget(MUSIC_GROUP, 7);
+
+        int displayIndex = 0;
+
+        for (Map.Entry<Widget, DropItem> e : iconItemMap.entrySet())
+        {
+            Widget icon = e.getKey();
+            DropItem d = e.getValue();
+            boolean rolled = rolledIds.contains(d.getItemId());
+
+            if (hideRolledItems && rolled)
+            {
+                icon.setHidden(true);
+            }
+            else
+            {
+                icon.setHidden(false);
+                int col = displayIndex % COLUMNS;
+                int row = displayIndex / COLUMNS;
+                int x = MARGIN_X + col * (ICON_SIZE + PADDING);
+                int y = MARGIN_Y + row * (ICON_SIZE + PADDING);
+                icon.setOriginalX(x);
+                icon.setOriginalY(y);
+                icon.revalidate();
+                displayIndex++;
+            }
+        }
+
+        int rows = (displayIndex + COLUMNS - 1) / COLUMNS;
+        if (scrollable != null)
+        {
+            scrollable.setScrollHeight(MARGIN_Y * 2 + rows * (ICON_SIZE + PADDING));
+            scrollable.revalidate();
+        }
+        if (scrollbar != null)
+        {
+            scrollbar.revalidateScroll();
+        }
+    }
+
+    private static List<Widget> copyChildren(Widget parent, boolean dynamic)
+    {
+        if (parent == null)
+        {
+            return new ArrayList<>();
+        }
+        Widget[] kids = dynamic ? parent.getDynamicChildren() : parent.getChildren();
+        return kids != null ? new ArrayList<>(Arrays.asList(kids)) : new ArrayList<>();
+    }
+
+    private static void restoreChildren(Widget parent, List<Widget> staticKids, List<Widget> dynamicKids)
+    {
+        if (parent == null)
+        {
+            return;
+        }
+
+        Widget[] currentStatic = parent.getChildren();
+        if (currentStatic != null)
+        {
+            for (Widget w : currentStatic)
+            {
+                w.setHidden(true);
+            }
+        }
+
+        Widget[] currentDyn = parent.getDynamicChildren();
+        if (currentDyn != null)
+        {
+            for (Widget w : currentDyn)
+            {
+                w.setHidden(true);
+            }
+        }
+
+        if (staticKids != null)
+        {
+            for (Widget w : staticKids)
+            {
+                w.setHidden(false);
+            }
+        }
+        if (dynamicKids != null)
+        {
+            for (Widget w : dynamicKids)
+            {
+                w.setHidden(false);
+            }
+        }
+
+        parent.revalidate();
+    }
+
+    private Widget updateTitle(NpcDropData dropData)
+    {
+        Widget title = client.getWidget(MUSIC_GROUP, 8);
+        if (title != null)
+        {
+            if (originalTitleText == null)
+            {
+                originalTitleText = title.getText();
+            }
+            title.setText(dropData.getName());
+            title.revalidate();
+        }
+        return title;
+    }
+
+    private void drawProgressBarAndToggle(Widget root, Widget title, NpcDropData dropData, int rolledCount, int totalDrops)
+    {
+        int fontId = title != null ? title.getFontId() : 0;
+        boolean shadowed = title != null && title.getTextShadowed();
+
+        int lvlX = Objects.requireNonNull(title).getOriginalX() + title.getOriginalWidth() + 83;
+        int lvlY = title.getOriginalY();
+
+        Widget lvl = root.createChild(-1);
+        lvl.setHidden(false);
+        lvl.setType(WidgetType.TEXT);
+        lvl.setText(String.format("Lvl %d", dropData.getLevel()));
+        lvl.setFontId(fontId);
+        lvl.setTextShadowed(shadowed);
+        lvl.setTextColor(0x00b33c);
+        lvl.setOriginalX(lvlX);
+        lvl.setOriginalY(lvlY);
+        lvl.setOriginalWidth(title.getOriginalWidth());
+        lvl.setOriginalHeight(title.getOriginalHeight());
+        lvl.revalidate();
+
+        Widget oldBar = client.getWidget(MUSIC_GROUP, 9);
+        if (oldBar == null)
+        {
+            return;
+        }
+        int xOld = oldBar.getOriginalX();
+        int yOld = oldBar.getOriginalY();
+        int wOld = oldBar.getOriginalWidth();
+        int hOld = oldBar.getOriginalHeight();
+
+        int newW = Math.round(wOld * WIDTH_RATIO);
+        int newY = yOld + (hOld - BAR_HEIGHT) / 2;
+
+        Widget bg = root.createChild(-1);
+        bg.setHidden(false);
+        bg.setType(WidgetType.RECTANGLE);
+        bg.setOriginalX(xOld);
+        bg.setOriginalY(newY);
+        bg.setOriginalWidth(newW);
+        bg.setOriginalHeight(BAR_HEIGHT);
+        bg.setFilled(true);
+        bg.setTextColor(0x000000);
+        bg.revalidate();
+
+        final int border = 1;
+        int innerWidth = newW - border * 2;
+        int fillW = Math.round(innerWidth * (float) rolledCount / totalDrops);
+
+        Widget fill = root.createChild(-1);
+        fill.setHidden(false);
+        fill.setType(WidgetType.RECTANGLE);
+        fill.setOriginalX(xOld + border);
+        fill.setOriginalY(newY + border);
+        fill.setOriginalWidth(fillW);
+        fill.setOriginalHeight(BAR_HEIGHT - border * 2);
+        fill.setFilled(true);
+        fill.setTextColor(0x00b33c);
+        fill.revalidate();
+
+        String txt = String.format("%d/%d", rolledCount, totalDrops);
+        Widget label = root.createChild(-1);
+        label.setHidden(false);
+        label.setType(WidgetType.TEXT);
+        label.setText(txt);
+        label.setTextColor(0xFFFFFF);
+        label.setFontId(fontId);
+        label.setTextShadowed(shadowed);
+        label.setOriginalWidth(newW);
+        label.setOriginalHeight(BAR_HEIGHT);
+        label.setOriginalX(xOld + (newW / 2) - (txt.length() * 4));
+        label.setOriginalY(newY + (BAR_HEIGHT / 2) - 6);
+        label.revalidate();
+
+        int eyeX = xOld + newW + 4;
+        int eyeY = newY + (BAR_HEIGHT / 2) - (EYE_SIZE / 2);
+
+        Widget eye = root.createChild(-1);
+        eye.setHidden(false);
+        eye.setType(WidgetType.GRAPHIC);
+        eye.setOriginalX(eyeX);
+        eye.setOriginalY(eyeY);
+        eye.setOriginalWidth(EYE_SIZE);
+        eye.setOriginalHeight(EYE_SIZE);
+        eye.setSpriteId(hideRolledItems ? 2222 : 2221);
+        eye.revalidate();
+        eye.setAction(0, "Toggle rolled items");
+
+        eye.setOnOpListener((JavaScriptCallback) (ScriptEvent ev) ->
+        {
+            hideRolledItems = !hideRolledItems;
+            updateIconsVisibilityAndLayout();
+            eye.setSpriteId(hideRolledItems ? 2222 : 2221);
+            eye.revalidate();
+        });
+        eye.setHasListener(true);
+    }
+
+    private void drawDropIcons(Widget scrollable, Widget scrollbar, Widget jukebox, List<DropItem> drops, Set<Integer> rolledIds)
+    {
+        if (scrollable == null || scrollbar == null)
+        {
+            return;
+        }
+
+        if (backupJukeboxStaticKids == null && jukebox != null)
+        {
+            backupJukeboxStaticKids = copyChildren(jukebox, false);
+        }
+        if (backupJukeboxDynamicKids == null && jukebox != null)
+        {
+            backupJukeboxDynamicKids = copyChildren(jukebox, true);
+        }
+        if (backupScrollStaticKids == null)
+        {
+            backupScrollStaticKids = copyChildren(scrollable, false);
+        }
+        if (backupScrollDynamicKids == null)
+        {
+            backupScrollDynamicKids = copyChildren(scrollable, true);
+        }
+
+        WidgetUtils.hideAllChildrenSafely(jukebox);
+        WidgetUtils.hideAllChildrenSafely(scrollable);
+
+        for (DropItem d : drops)
+        {
+            int itemId = d.getItemId();
+            Widget icon = scrollable.createChild(-1);
+            icon.setHidden(false);
+            icon.setType(WidgetType.GRAPHIC);
+            int spriteId = itemSpriteCache.getSpriteId(itemId);
+            icon.setSpriteId(spriteId);
+            icon.setItemQuantityMode(ItemQuantityMode.NEVER);
+            icon.setOriginalX(MARGIN_X);
+            icon.setOriginalY(MARGIN_Y);
+            icon.setOriginalWidth(ICON_SIZE);
+            icon.setOriginalHeight(ICON_SIZE);
+            icon.setOpacity(rolledIds.contains(itemId) ? 0 : 150);
+            icon.revalidate();
+
+            iconItemMap.put(icon, d);
+        }
+
+        updateIconsVisibilityAndLayout();
     }
 
     private void applyOverride(NpcDropData dropData)
@@ -89,24 +370,33 @@ public class MusicWidgetController
         for (int childId : toHide)
         {
             Widget w = client.getWidget(MUSIC_GROUP, childId);
-            if (w != null) w.setHidden(true);
+            if (w != null)
+            {
+                w.setHidden(true);
+            }
         }
 
         List<DropItem> drops = dropData.getDropTableSections().stream()
-                .filter(sec -> {
+                .filter(sec ->
+                {
                     String h = sec.getHeader();
-                    if (h == null) return true;
+                    if (h == null)
+                    {
+                        return true;
+                    }
                     String lower = h.toLowerCase();
-
-                    //wiki may combine these sections under "Rare and Gem drop table"
                     if (lower.contains("rare and gem drop table"))
                     {
                         return config.showRareDropTable() && config.showGemDropTable();
                     }
-
-                    if (!config.showRareDropTable() && lower.contains("rare drop table")) return false;
-                    if (!config.showGemDropTable() && lower.contains("gem drop table")) return false;
-
+                    if (!config.showRareDropTable() && lower.contains("rare drop table"))
+                    {
+                        return false;
+                    }
+                    if (!config.showGemDropTable() && lower.contains("gem drop table"))
+                    {
+                        return false;
+                    }
                     return true;
                 })
                 .flatMap(sec -> sec.getItems().stream())
@@ -120,171 +410,27 @@ public class MusicWidgetController
                 .count();
 
         Widget root = client.getWidget(MUSIC_GROUP, 0);
+        Widget title = updateTitle(dropData);
+
         if (root != null)
         {
-            Widget title = client.getWidget(MUSIC_GROUP, 8);
-            if (title != null && originalTitleText == null) originalTitleText = title.getText();
-
-            if (title != null && dropData != null)
-            {
-                title.setText(dropData.getName());
-                title.revalidate();
-            }
-
-            int fontId = title != null ? title.getFontId() : 0;
-            boolean shadowed = title != null && title.getTextShadowed();
             root.setHidden(false);
             root.setType(WidgetType.LAYER);
-            root.revalidate();
-
             WidgetUtils.hideAllChildrenSafely(root);
 
-            int lvlX = Objects.requireNonNull(title).getOriginalX() + title.getOriginalWidth() + 83;
-            int lvlY = title.getOriginalY();
+            drawProgressBarAndToggle(root, title, dropData, rolledCount, totalDrops);
+        }
 
-            Widget lvl = root.createChild(-1);
-            lvl.setHidden(false);
-            lvl.setType(WidgetType.TEXT);
-            lvl.setText(String.format("Lvl %d", dropData.getLevel()));
-            lvl.setFontId(fontId);
-            lvl.setTextShadowed(shadowed);
-            lvl.setTextColor(0x00b33c);
-            lvl.setOriginalX(lvlX);
-            lvl.setOriginalY(lvlY);
-            lvl.setOriginalWidth(title.getOriginalWidth());
-            lvl.setOriginalHeight(title.getOriginalHeight());
-            lvl.revalidate();
+        Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
+        Widget jukebox = client.getWidget(MUSIC_GROUP, 6);
+        Widget scrollbar = client.getWidget(MUSIC_GROUP, 7);
 
-            Widget oldBar = client.getWidget(MUSIC_GROUP, 9);
-            if (oldBar == null) return;
-            int xOld = oldBar.getOriginalX();
-            int yOld = oldBar.getOriginalY();
-            int wOld = oldBar.getOriginalWidth();
-            int hOld = oldBar.getOriginalHeight();
+        drawDropIcons(scrollable, scrollbar, jukebox, drops, rolledIds);
 
-            final int BAR_HEIGHT    = 15;
-            final float WIDTH_RATIO = 0.7f;
-            int newW  = Math.round(wOld * WIDTH_RATIO);
-
-            int newY  = yOld + (hOld - BAR_HEIGHT) / 2;
-
-            Widget bg = root.createChild(-1);
-            bg.setHidden(false);
-            bg.setType(WidgetType.RECTANGLE);
-            bg.setOriginalX(xOld);
-            bg.setOriginalY(newY);
-            bg.setOriginalWidth(newW);
-            bg.setOriginalHeight(BAR_HEIGHT);
-            bg.setFilled(true);
-            bg.setTextColor(0x000000);
-            bg.revalidate();
-
-            final int BORDER = 1;
-            int innerWidth = newW - BORDER * 2;
-            int fillW = Math.round(innerWidth * (float) rolledCount / totalDrops);
-
-            Widget fill = root.createChild(-1);
-            fill.setHidden(false);
-            fill.setType(WidgetType.RECTANGLE);
-            fill.setOriginalX(xOld + BORDER);
-            fill.setOriginalY(newY + BORDER);
-            fill.setOriginalWidth(fillW);
-            fill.setOriginalHeight(BAR_HEIGHT - BORDER * 2);
-            fill.setFilled(true);
-            fill.setTextColor(0x00b33c);
-            fill.revalidate();
-
-            String txt = String.format("%d/%d", rolledCount, totalDrops);
-            Widget label = root.createChild(-1);
-            label.setHidden(false);
-            label.setType(WidgetType.TEXT);
-            label.setText(txt);
-            label.setTextColor(0xFFFFFF);
-            label.setFontId(title.getFontId());
-            label.setTextShadowed(title.getTextShadowed());
-            label.setOriginalWidth(newW);
-            label.setOriginalHeight(BAR_HEIGHT);
-            label.setOriginalX(xOld + (newW / 2) - (txt.length() * 4));
-            label.setOriginalY(newY + (BAR_HEIGHT / 2) - 6);
-            label.revalidate();
-
+        if (root != null)
+        {
             root.revalidate();
         }
-
-        final int ICON_SIZE = 32, PADDING = 4, COLUMNS = 4, MARGIN_X = 8, MARGIN_Y = 8;
-        Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
-        Widget jukebox    = client.getWidget(MUSIC_GROUP, 6);
-        Widget overlay    = client.getWidget(MUSIC_GROUP, 5);
-        Widget scrollbar  = client.getWidget(MUSIC_GROUP, 7);
-
-        if (backupJukeboxStaticKids == null && jukebox != null)
-        {
-            Widget[] kids = jukebox.getChildren();
-            backupJukeboxStaticKids = (kids != null)
-                    ? new ArrayList<>(Arrays.asList(kids))
-                    : new ArrayList<>();
-        }
-
-        // backup dynamic children of jukebox
-        if (backupJukeboxDynamicKids == null && jukebox != null)
-        {
-            Widget[] kids = jukebox.getDynamicChildren();
-            backupJukeboxDynamicKids = (kids != null)
-                    ? new ArrayList<>(Arrays.asList(kids))
-                    : new ArrayList<>();
-        }
-
-        // backup static children of scrollable
-        if (backupScrollStaticKids == null && scrollable != null)
-        {
-            Widget[] kids = scrollable.getChildren();
-            backupScrollStaticKids = (kids != null)
-                    ? new ArrayList<>(Arrays.asList(kids))
-                    : new ArrayList<>();
-        }
-
-        // backup dynamic children of scrollable
-        if (backupScrollDynamicKids == null && scrollable != null)
-        {
-            Widget[] kids = scrollable.getDynamicChildren();
-            backupScrollDynamicKids = (kids != null)
-                    ? new ArrayList<>(Arrays.asList(kids))
-                    : new ArrayList<>();
-        }
-
-        WidgetUtils.hideAllChildrenSafely(jukebox);
-        WidgetUtils.hideAllChildrenSafely(scrollable);
-
-        int displayIndex = 0;
-        for (DropItem d : drops)
-        {
-            int itemId = d.getItemId();
-            int col    = displayIndex % COLUMNS;
-            int row    = displayIndex / COLUMNS;
-            int x      = MARGIN_X + col * (ICON_SIZE + PADDING);
-            int y      = MARGIN_Y + row * (ICON_SIZE + PADDING);
-
-            Widget icon = Objects.requireNonNull(scrollable).createChild(-1);
-            icon.setHidden(false);
-            icon.setType(WidgetType.GRAPHIC);
-            int spriteId = itemSpriteCache.getSpriteId(itemId);
-            icon.setSpriteId(spriteId);
-            icon.setItemQuantityMode(ItemQuantityMode.NEVER);
-            icon.setOriginalX(x);
-            icon.setOriginalY(y);
-            icon.setOriginalWidth(ICON_SIZE);
-            icon.setOriginalHeight(ICON_SIZE);
-            icon.setOpacity(rolledIds.contains(itemId) ? 0 : 150);
-            icon.revalidate();
-
-            iconItemMap.put(icon, d);
-
-            displayIndex++;
-        }
-
-        int rows = (displayIndex + COLUMNS - 1) / COLUMNS;
-        Objects.requireNonNull(scrollable).setScrollHeight(MARGIN_Y * 2 + rows * (ICON_SIZE + PADDING));
-        Objects.requireNonNull(scrollbar).revalidateScroll();
     }
 
     private void revertOverride()
@@ -294,11 +440,10 @@ public class MusicWidgetController
             return;
         }
 
-        Widget root       = client.getWidget(MUSIC_GROUP, 0);
+        Widget root = client.getWidget(MUSIC_GROUP, 0);
         Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
-        Widget jukebox    = client.getWidget(MUSIC_GROUP, 6);
+        Widget jukebox = client.getWidget(MUSIC_GROUP, 6);
 
-        // 1) Hide any dynamic widgets under the root (lvl text, bar, counter)
         if (root != null)
         {
             Widget[] dynRoot = root.getDynamicChildren();
@@ -312,35 +457,13 @@ public class MusicWidgetController
             }
         }
 
-        // 2) Hide injected drop icons under scrollable
-        if (scrollable != null && backupScrollStaticKids != null && backupScrollDynamicKids != null)
-        {
-            Widget[] staticKids = scrollable.getChildren();
-            if (staticKids != null) {for (Widget w : staticKids) {w.setHidden(true);}}
+        restoreChildren(scrollable, backupScrollStaticKids, backupScrollDynamicKids);
+        restoreChildren(jukebox, backupJukeboxStaticKids, backupJukeboxDynamicKids);
 
-            Widget[] dynamicKids = scrollable.getDynamicChildren();
-            if (dynamicKids != null) {for (Widget w : dynamicKids) {w.setHidden(true);}}
-            for (Widget w : backupScrollStaticKids) {w.setHidden(false);}
-            for (Widget w : backupScrollDynamicKids) {w.setHidden(false);}
-            scrollable.revalidate();
-        }
-
-        if (jukebox != null && backupJukeboxStaticKids != null && backupJukeboxDynamicKids != null)
-        {
-            Widget[] jbStaticKids = jukebox.getChildren();
-            if (jbStaticKids != null) {for (Widget w : jbStaticKids) {w.setHidden(true);}}
-
-            Widget[] jbDynamicKids = jukebox.getDynamicChildren();
-            if (jbDynamicKids != null) {for (Widget w : jbDynamicKids) {w.setHidden(true);}}
-            for (Widget w : backupJukeboxStaticKids) {w.setHidden(false);}
-            for (Widget w : backupJukeboxDynamicKids) {w.setHidden(false);}
-            jukebox.revalidate();
-        }
-
-        Widget title     = client.getWidget(MUSIC_GROUP, 8);
-        Widget overlay   = client.getWidget(MUSIC_GROUP, 5);
+        Widget title = client.getWidget(MUSIC_GROUP, 8);
+        Widget overlay = client.getWidget(MUSIC_GROUP, 5);
         Widget scrollbar = client.getWidget(MUSIC_GROUP, 7);
-        Widget progress  = client.getWidget(MUSIC_GROUP, 9);
+        Widget progress = client.getWidget(MUSIC_GROUP, 9);
 
         if (title != null && originalTitleText != null)
         {
@@ -403,11 +526,11 @@ public class MusicWidgetController
         }
 
         originalTitleText = null;
-        currentDrops      = null;
-        overrideActive    = false;
+        currentDrops = null;
+        overrideActive = false;
         backupJukeboxStaticKids = null;
         backupJukeboxDynamicKids = null;
-        backupScrollStaticKids  = null;
+        backupScrollStaticKids = null;
         backupScrollDynamicKids = null;
         iconItemMap.clear();
     }
