@@ -209,7 +209,7 @@ public class DropFetcher
 
         Request req = new Request.Builder()
                 .url(apiUrl)
-                .header("User-Agent", "RuneLite-ChanceMan/2.5.0")
+                .header("User-Agent", "RuneLite-ChanceMan/2.6.0")
                 .build();
 
         try (Response res = httpClient.newCall(req).execute())
