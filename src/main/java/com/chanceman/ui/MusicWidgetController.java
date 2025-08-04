@@ -4,10 +4,13 @@ import com.chanceman.ChanceManConfig;
 import com.chanceman.drops.DropItem;
 import com.chanceman.drops.NpcDropData;
 import com.chanceman.managers.RolledItemsManager;
+
 import java.util.*;
 import java.util.stream.Collectors;
 import javax.inject.Inject;
 import javax.inject.Singleton;
+import javax.swing.*;
+
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
@@ -31,6 +34,7 @@ public class MusicWidgetController
     private static final int BAR_HEIGHT = 15;
     private static final float WIDTH_RATIO = 0.7f;
     private static final int EYE_SIZE = 20;
+    private static final int SEARCH_SPRITE = 1113;
 
     private final Client client;
     private final ClientThread clientThread;
@@ -38,6 +42,7 @@ public class MusicWidgetController
     private final SpriteOverrideManager spriteOverrideManager;
     private final ItemSpriteCache itemSpriteCache;
     private final ChanceManConfig config;
+    private final NpcSearchService searchService;
 
     private NpcDropData currentDrops = null;
     private List<Widget> backupJukeboxStaticKids = null;
@@ -56,7 +61,8 @@ public class MusicWidgetController
             RolledItemsManager rolledItemsManager,
             SpriteOverrideManager spriteOverrideManager,
             ItemSpriteCache itemSpriteCache,
-            ChanceManConfig config)
+            ChanceManConfig config,
+            NpcSearchService searchService)
     {
         this.client = client;
         this.clientThread = clientThread;
@@ -64,6 +70,7 @@ public class MusicWidgetController
         this.spriteOverrideManager = spriteOverrideManager;
         this.itemSpriteCache = itemSpriteCache;
         this.config = config;
+        this.searchService = searchService;
     }
 
     public boolean hasData()
@@ -76,22 +83,36 @@ public class MusicWidgetController
         return currentDrops;
     }
 
+    /**
+     * Replace the music widget with a drop table view for the given NPC.
+     * If an override is already active, it will be updated
+     */
     public void override(NpcDropData dropData)
     {
-        if (dropData == null || overrideActive)
+        if (dropData == null)
         {
             return;
         }
         currentDrops = dropData;
         hideRolledItems = false;
-        overrideActive = true;
-        clientThread.invokeLater(() ->
+        if (!overrideActive)
         {
-            applyOverride(dropData);
-            spriteOverrideManager.register();
-        });
+            overrideActive = true;
+            clientThread.invokeLater(() ->
+            {
+                applyOverride(dropData);
+                spriteOverrideManager.register();
+            });
+        }
+        else
+        {
+            clientThread.invokeLater(() -> applyOverride(dropData));
+        }
     }
 
+    /**
+     * Remove the drop table overlay and restore the original music widget.
+     */
     public void restore()
     {
         if (!overrideActive)
@@ -312,6 +333,84 @@ public class MusicWidgetController
             eye.revalidate();
         });
         eye.setHasListener(true);
+
+        int searchX = eyeX + EYE_SIZE + PADDING;
+        int searchY = eyeY;
+
+        Widget search = root.createChild(-1);
+        search.setHidden(false);
+        search.setType(WidgetType.GRAPHIC);
+        search.setOriginalX(searchX);
+        search.setOriginalY(searchY);
+        search.setOriginalWidth(EYE_SIZE);
+        search.setOriginalHeight(EYE_SIZE);
+        search.setSpriteId(SEARCH_SPRITE);
+        search.revalidate();
+        search.setAction(0, "Search NPC drops");
+
+        search.setOnOpListener((JavaScriptCallback) ev -> showSearchDialog());
+        search.setHasListener(true);
+
+        root.revalidate();
+    }
+
+    /**
+     * Display a Swing dialog prompting the user for an NPC name or ID. The
+     * potentially long running search executes on a background thread so the
+     * UI remains responsive. Selecting a result will override the widget with
+     * the chosen drop table.
+     */
+    private void showSearchDialog()
+    {
+        SwingUtilities.invokeLater(() ->
+        {
+            String query = JOptionPane.showInputDialog(
+                    null,
+                    "Enter NPC name or ID:",
+                    "Search NPC",
+                    JOptionPane.PLAIN_MESSAGE
+            );
+            if (query == null || query.trim().isEmpty())
+            {
+                return;
+            }
+
+            new Thread(() -> {
+                List<NpcDropData> results = searchService.search(query.trim());
+
+                SwingUtilities.invokeLater(() -> {
+                    if (results.isEmpty())
+                    {
+                        JOptionPane.showMessageDialog(
+                                null,
+                                "No NPCs found for: " + query,
+                                "Search NPC",
+                                JOptionPane.INFORMATION_MESSAGE
+                        );
+                        return;
+                    }
+
+                    List<NpcDropData> limited = results.stream().limit(5).collect(Collectors.toList());
+                    String[] choices = limited.stream()
+                            .map(n -> String.format("%s (ID %d, Lvl %d)", n.getName(), n.getNpcId(), n.getLevel()))
+                            .toArray(String[]::new);
+                    int idx = JOptionPane.showOptionDialog(
+                            null,
+                            "Select NPC:",
+                            "Search Results",
+                            JOptionPane.DEFAULT_OPTION,
+                            JOptionPane.PLAIN_MESSAGE,
+                            null,
+                            choices,
+                            choices[0]
+                    );
+                    if (idx >= 0 && idx < limited.size())
+                    {
+                        override(limited.get(idx));
+                    }
+                });
+            }).start();
+        });
     }
 
     private void drawDropIcons(Widget scrollable, Widget scrollbar, Widget jukebox, List<DropItem> drops, Set<Integer> rolledIds)

@@ -11,6 +11,7 @@ import com.chanceman.filters.ItemsFilter;
 import com.chanceman.ui.DropsTabUI;
 import com.chanceman.ui.DropsTooltipOverlay;
 import com.chanceman.ui.MusicWidgetController;
+import com.chanceman.ui.NpcSearchService;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.Getter;
@@ -84,6 +85,7 @@ public class ChanceManPlugin extends Plugin
     @Inject private DropFetcher dropFetcher;
     @Inject private DropCache dropCache;
     @Inject private MusicWidgetController musicWidgetController;
+    @Inject private NpcSearchService npcSearchService;
 
     private ChanceManPanel chanceManPanel;
     private NavigationButton navButton;
@@ -151,6 +153,7 @@ public class ChanceManPlugin extends Plugin
         clientToolbar.addNavigation(navButton);
 
         accountManager.init();
+        dropCache.getAllNpcData();
     }
 
     private void disableFeatures()
