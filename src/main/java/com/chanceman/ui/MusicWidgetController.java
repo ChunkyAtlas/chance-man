@@ -346,7 +346,7 @@ public class MusicWidgetController
         search.setOriginalHeight(EYE_SIZE);
         search.setSpriteId(SEARCH_SPRITE);
         search.revalidate();
-        search.setAction(0, "Search NPC drops");
+        search.setAction(0, "Search Drops");
 
         search.setOnOpListener((JavaScriptCallback) ev -> showSearchDialog());
         search.setHasListener(true);
