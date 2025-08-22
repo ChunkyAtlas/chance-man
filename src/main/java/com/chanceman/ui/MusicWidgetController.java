@@ -52,6 +52,7 @@ public class MusicWidgetController
     private String originalTitleText = null;
     @Getter private final Map<Widget, DropItem> iconItemMap = new LinkedHashMap<>();
     @Getter private boolean overrideActive = false;
+    @Inject private MusicSearchButton musicSearchButton;
     private boolean hideRolledItems = false;
 
     @Inject
@@ -95,6 +96,7 @@ public class MusicWidgetController
         }
         currentDrops = dropData;
         hideRolledItems = false;
+        musicSearchButton.onOverrideActivated();
         if (!overrideActive)
         {
             overrideActive = true;
@@ -413,6 +415,11 @@ public class MusicWidgetController
         });
     }
 
+    public void openDropsSearch()
+    {
+        showSearchDialog();
+    }
+
     private void drawDropIcons(Widget scrollable, Widget scrollbar, Widget jukebox, List<DropItem> drops, Set<Integer> rolledIds)
     {
         if (scrollable == null || scrollbar == null)
@@ -632,5 +639,6 @@ public class MusicWidgetController
         backupScrollStaticKids = null;
         backupScrollDynamicKids = null;
         iconItemMap.clear();
+        musicSearchButton.onOverrideDeactivated();
     }
 }

@@ -134,6 +134,18 @@ public enum ItemSets {
 
     // Miscellaneous sets
     OathplateSet(ItemID.SET_OATHPLATE_ARMOUR),
+    BloodMoonSet(31136),
+    BlueMoonSet(31139),
+    EclipseMoonSet(31142),
+    TorvaSet(31145),
+    VirtusSet(31148),
+    RockShellSet(31151),
+    SkeletalSet(31154),
+    SpinedSet(31157),
+    SwampBarkSet(31160),
+    BloodBarkSet(31163),
+    MixedHideSet(31166),
+    HueyHideSet(31169),
     PartyhatSet(ItemID.SET_PARTYHAT),
     HalloweenMaskSet(ItemID.SET_HALLOWEEN_MASK),
     AncestralRobes(ItemID.SET_ANCESTRAL_ROBES),

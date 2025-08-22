@@ -209,7 +209,7 @@ public class DropFetcher
 
         Request req = new Request.Builder()
                 .url(apiUrl)
-                .header("User-Agent", "RuneLite-ChanceMan/2.6.0")
+                .header("User-Agent", "RuneLite-ChanceMan/2.6.1")
                 .build();
 
         try (Response res = httpClient.newCall(req).execute())
@@ -254,7 +254,7 @@ public class DropFetcher
                 + URLEncoder.encode(query, StandardCharsets.UTF_8);
         Request req = new Request.Builder()
                 .url(url)
-                .header("User-Agent", "RuneLite-ChanceMan/2.6.0")
+                .header("User-Agent", "RuneLite-ChanceMan/2.6.1")
                 .build();
         try (Response res = httpClient.newCall(req).execute())
         {
@@ -301,7 +301,7 @@ public class DropFetcher
     {
         Request req = new Request.Builder()
                 .url(url)
-                .header("User-Agent", "RuneLite-ChanceMan/2.6.0")
+                .header("User-Agent", "RuneLite-ChanceMan/2.6.1")
                 .build();
         try (Response res = httpClient.newCall(req).execute())
         {

@@ -12,6 +12,7 @@ import com.chanceman.ui.DropsTabUI;
 import com.chanceman.ui.DropsTooltipOverlay;
 import com.chanceman.ui.MusicWidgetController;
 import com.chanceman.ui.NpcSearchService;
+import com.chanceman.ui.MusicSearchButton;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.Getter;
@@ -86,6 +87,7 @@ public class ChanceManPlugin extends Plugin
     @Inject private DropCache dropCache;
     @Inject private MusicWidgetController musicWidgetController;
     @Inject private NpcSearchService npcSearchService;
+    @Inject private MusicSearchButton musicSearchButton;
 
     private ChanceManPanel chanceManPanel;
     private NavigationButton navButton;
@@ -154,16 +156,20 @@ public class ChanceManPlugin extends Plugin
 
         accountManager.init();
         dropCache.getAllNpcData();
+        eventBus.register(musicSearchButton);
+        musicSearchButton.onStart();
     }
 
     private void disableFeatures()
     {
         if (!featuresActive) return;
         featuresActive = false;
+        clientThread.invokeLater(musicWidgetController::restore);
+        musicSearchButton.onStop();
+        eventBus.unregister(musicSearchButton);
         dropsTabUI.shutDown();
         eventBus.unregister(accountManager);
         getInjector().getInstance(ActionHandler.class).shutDown();
-        clientThread.invokeLater(musicWidgetController::restore);
 
         if (clientToolbar != null && navButton != null)
         {
