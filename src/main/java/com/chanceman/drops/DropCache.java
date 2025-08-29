@@ -4,6 +4,7 @@ import static net.runelite.client.RuneLite.RUNELITE_DIR;
 
 import com.chanceman.account.AccountManager;
 import com.google.gson.Gson;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.inject.Inject;
@@ -17,8 +18,7 @@ import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -40,12 +40,27 @@ public class DropCache
     private final Map<String, Path> nameIndex = new ConcurrentHashMap<>();
     private volatile boolean indexLoaded = false;
 
+    // Dedicated IO executor so we dont block the common ForkJoinPool with file ops
+    private final ExecutorService ioExecutor = Executors.newFixedThreadPool(
+            Math.max(2, Runtime.getRuntime().availableProcessors() / 2),
+            new ThreadFactoryBuilder().setNameFormat("dropcache-io-%d").build()
+    );
+
     @Inject
     public DropCache(Gson gson, AccountManager accountManager, DropFetcher dropFetcher)
     {
         this.gson = gson;
         this.accountManager = accountManager;
         this.dropFetcher = dropFetcher;
+    }
+
+    /** Preload on-disk index and prune stale cache entries. */
+    public void startUp()
+    {
+        String player = accountManager.getPlayerName();
+        if (player == null || player.isEmpty()) { return; }
+        loadIndex();
+        pruneOldCaches();
     }
 
     /**
@@ -89,7 +104,7 @@ public class DropCache
                 removeIndex(file);
             }
             return null;
-        }).thenCompose(cached ->
+        }, ioExecutor).thenComposeAsync(cached ->
         {
             if (cached != null)
             {
@@ -97,7 +112,7 @@ public class DropCache
             }
 
             return dropFetcher.fetch(npcId, name, level)
-                    .thenApply(data ->
+                    .thenApplyAsync(data ->
                     {
                         try
                         {
@@ -114,16 +129,23 @@ public class DropCache
                             synchronized (lock)
                             {
                                 Path tmp = out.resolveSibling(out.getFileName() + ".tmp");
-                                Files.writeString(
-                                        tmp,
-                                        json,
-                                        StandardCharsets.UTF_8,
-                                        StandardOpenOption.CREATE,
-                                        StandardOpenOption.TRUNCATE_EXISTING
-                                );
-                                Files.move(tmp, out, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                                try
+                                {
+                                    Files.writeString(
+                                            tmp,
+                                            json,
+                                            StandardCharsets.UTF_8,
+                                            StandardOpenOption.CREATE,
+                                            StandardOpenOption.TRUNCATE_EXISTING
+                                    );
+                                    Files.move(tmp, out, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                                }
+                                finally
+                                {
+                                    writeLocks.remove(out);
+                                    try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
+                                }
                             }
-                            writeLocks.remove(out);
 
                             cache.put(out, data);
                             nameIndex.put(buildNameKey(data.getName(), data.getLevel()), out);
@@ -144,13 +166,13 @@ public class DropCache
                             log.error("Failed to write cache file for {}", name, e);
                         }
                         return data;
-                    })
+                    }, ioExecutor)
                     .exceptionally(ex ->
                     {
                         log.error("Error fetching drop data for NPC {}", npcId, ex);
                         return null;
                     });
-        });
+        }, ioExecutor);
     }
 
     /**
@@ -191,7 +213,7 @@ public class DropCache
             }
 
             return new ArrayList<>(names);
-        });
+        }, ioExecutor);
     }
 
     private boolean isFresh(Path file)
@@ -405,6 +427,28 @@ public class DropCache
                 log.debug("Error loading cache index", e);
             }
             indexLoaded = true;
+        }
+    }
+
+    /** Gracefully shutdown IO executor. */
+    public void shutdown()
+    {
+        ioExecutor.shutdown();
+        try
+        {
+            if (!ioExecutor.awaitTermination(3, TimeUnit.SECONDS))
+            {
+                ioExecutor.shutdownNow();
+                if (!ioExecutor.awaitTermination(2, TimeUnit.SECONDS))
+                {
+                    log.warn("dropcache-io executor did not terminate cleanly");
+                }
+            }
+        }
+        catch (InterruptedException ie)
+        {
+            ioExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 

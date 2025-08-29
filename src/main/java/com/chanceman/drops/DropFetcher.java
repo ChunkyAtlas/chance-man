@@ -26,7 +26,6 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.*;
-import java.util.stream.Collectors;
 
 /**
  * Retrieves NPC drop information from the wiki and
@@ -36,6 +35,7 @@ import java.util.stream.Collectors;
 @Singleton
 public class DropFetcher
 {
+    private static final String USER_AGENT = "RuneLite-ChanceMan/2.7.0";
     private final OkHttpClient httpClient;
     private final ItemManager itemManager;
     private final ClientThread clientThread;
@@ -47,70 +47,81 @@ public class DropFetcher
         this.httpClient = httpClient;
         this.itemManager  = itemManager;
         this.clientThread = clientThread;
-        startUp();
     }
 
     /**
      * Asynchronously fetch an NPC's drop table from the wiki.
-     * The lookup first attempts an ID-based redirect and falls back to the given
-     * name if necessary.
+     * 1) Download + parse document (BG thread)
+     * 2) Resolve item IDs on client thread using ItemManager.search (canonicalized)
      */
     public CompletableFuture<NpcDropData> fetch(int npcId, String name, int level)
     {
-        return CompletableFuture.supplyAsync(() ->
-                {
-                    String url = buildWikiUrl(npcId, name);
-                    String html = fetchHtml(url);
-                    Document doc = Jsoup.parse(html);
-                    String actualName = Optional
-                            .ofNullable(doc.selectFirst("h1#firstHeading"))
-                            .map(Element::text)
-                            .orElse(name);
-                    int resolvedLevel = level > 0 ? level : parseCombatLevel(doc);
-                    int actualId = resolveNpcId(doc);
-                    List<DropTableSection> sections = parseSections(doc);
-                    if (sections.isEmpty())
-                    {
-                        return null; // skip NPCs without drop tables
-                    }
-                    return new NpcDropData(actualId, actualName, resolvedLevel, sections);
-                }, fetchExecutor)
+        return CompletableFuture.supplyAsync(() -> {
+            String url = buildWikiUrl(npcId, name);
+            String html = fetchHtml(url);
+            Document doc = Jsoup.parse(html);
 
-                .thenCompose(data ->
-                {
-                    if (data == null)
-                    {
-                        return CompletableFuture.completedFuture(null);
+            String actualName = name;
+            Element heading = doc.selectFirst("h1#firstHeading");
+            if (heading != null) {
+                actualName = heading.text();
+            }
+
+            int resolvedLevel = level > 0 ? level : parseCombatLevel(doc);
+            int actualId = resolveNpcId(doc);
+            List<DropTableSection> sections = parseSections(doc);
+            if (sections.isEmpty()) {
+                return null; // skip NPCs without drop tables
+            }
+            return new NpcDropData(actualId, actualName, resolvedLevel, sections);
+        }, fetchExecutor).thenCompose(data -> {
+            if (data == null) {
+                return CompletableFuture.completedFuture(null);
+            }
+
+            CompletableFuture<NpcDropData> resolved = new CompletableFuture<>();
+            clientThread.invoke(() -> {
+                for (DropTableSection sec : data.getDropTableSections()) {
+                    List<DropItem> items = sec.getItems();
+                    for (int i = 0; i < items.size(); i++) {
+                        DropItem d = items.get(i);
+                        d.setItemId(resolveItemId(d.getName()));
                     }
-                    CompletableFuture<NpcDropData> resolved = new CompletableFuture<>();
-                    clientThread.invoke(() ->
-                    {
-                        for (DropTableSection sec : data.getDropTableSections())
-                        {
-                            for (DropItem d : sec.getItems())
-                            {
-                                String itemName = d.getName();
-                                int resolvedId = itemManager.search(itemName).stream()
-                                        .map(ItemPrice::getId)
-                                        .filter(id ->
-                                        {
-                                            ItemComposition comp = itemManager.getItemComposition(id);
-                                            return comp != null && comp.getName().equalsIgnoreCase(itemName);
-                                        })
-                                        .findFirst()
-                                        .orElse(0);
-                                d.setItemId(resolvedId);
-                            }
-                        }
-                        resolved.complete(data);
-                    });
-                    return resolved;
-                });
+                }
+                resolved.complete(data);
+            });
+            return resolved;
+        });
     }
 
-    /**
-     * Extract drop table sections from the provided document.
-     */
+    /** Resolve an item name to an ID using ItemManager.search only (canonicalized). */
+    private int resolveItemId(String itemName)
+    {
+        if (itemName == null || itemName.isEmpty()) {
+            return 0;
+        }
+        String lower = itemName.trim().toLowerCase(Locale.ROOT);
+        if ("nothing".equals(lower) || "unknown".equals(lower)) {
+            return 0;
+        }
+
+        try {
+            List<ItemPrice> results = itemManager.search(itemName);
+            for (int j = 0; j < results.size(); j++) {
+                int id = results.get(j).getId();
+                ItemComposition comp = itemManager.getItemComposition(id);
+                if (comp != null && comp.getName() != null && comp.getName().equalsIgnoreCase(itemName)) {
+                    return itemManager.canonicalize(id);
+                }
+            }
+        } catch (Exception ex) {
+            // ignore; fall through
+        }
+
+        return 0;
+    }
+
+    /** Extract drop table sections (skips Nothing rows). */
     private List<DropTableSection> parseSections(Document doc)
     {
         Elements tables = doc.select("table.item-drops");
@@ -123,22 +134,28 @@ public class DropFetcher
             Element prev = table.previousElementSibling();
             while (prev != null)
             {
-                if (prev.tagName().matches("h[2-4]"))
-                {
+                String tag = prev.tagName();
+                if (tag != null && tag.matches("h[2-4]")) {
                     header = prev.text();
                     break;
                 }
                 prev = prev.previousElementSibling();
             }
 
-            List<DropItem> items = table.select("tbody tr").stream()
-                    .map(row -> row.select("td"))
-                    .filter(td -> td.size() >= 6)
-                    .map(td -> new DropItem(
-                            0,
-                            td.get(1).text().replace("(m)", "").trim(),
-                            td.get(3).text().trim()))
-                    .collect(Collectors.toList());
+            List<DropItem> items = new ArrayList<>();
+            Elements rows = table.select("tbody > tr");
+            for (Element row : rows) {
+                Elements tds = row.select("td");
+                if (tds.size() < 6) {
+                    continue;
+                }
+                String name = tds.get(1).text().replace("(m)", "").trim();
+                if (name.equalsIgnoreCase("nothing")) {
+                    continue;
+                }
+                String rarity = tds.get(3).text().trim();
+                items.add(new DropItem(0, name, rarity));
+            }
 
             if (!items.isEmpty())
             {
@@ -149,9 +166,7 @@ public class DropFetcher
         return sections;
     }
 
-    /**
-     * Attempt to parse the combat level from the NPC infobox.
-     */
+    /** Attempt to parse the combat level from the NPC infobox. */
     private int parseCombatLevel(Document doc)
     {
         Element infobox = doc.selectFirst("table.infobox");
@@ -164,19 +179,18 @@ public class DropFetcher
         {
             Element th = row.selectFirst("th");
             Element td = row.selectFirst("td");
-            if (th != null && td != null && th.text().toLowerCase(Locale.ROOT).contains("combat level"))
-            {
-                String txt = td.text();
-                for (String part : txt.split("[^0-9]+"))
-                {
-                    if (!part.isEmpty())
-                    {
-                        try
-                        {
-                            return Integer.parseInt(part);
-                        }
-                        catch (NumberFormatException ignore)
-                        {
+            if (th != null && td != null) {
+                String thText = th.text();
+                if (thText != null && thText.toLowerCase(Locale.ROOT).contains("combat level")) {
+                    String txt = td.text();
+                    String[] parts = txt.split("[^0-9]+");
+                    for (String part : parts) {
+                        if (part != null && part.length() > 0) {
+                            try {
+                                return Integer.parseInt(part);
+                            } catch (NumberFormatException nfe) {
+                                log.warn("Failed to parse combat level: {}", txt);
+                            }
                         }
                     }
                 }
@@ -185,12 +199,7 @@ public class DropFetcher
         return 0;
     }
 
-    /**
-     * Resolve the canonical wiki page ID for the provided document.
-     *
-     * @param doc parsed wiki HTML
-     * @return numeric page ID, or {@code 0} if it could not be determined
-     */
+    /** Resolve the canonical wiki page ID for the provided document. */
     private int resolveNpcId(Document doc)
     {
         Element link = doc.selectFirst("link[rel=canonical]");
@@ -201,7 +210,6 @@ public class DropFetcher
 
         String href = link.attr("href");
         String title = href.substring(href.lastIndexOf('/') + 1);
-        // Canonical links may already be URL-encoded; decode first then re-encode
         title = URLDecoder.decode(title, StandardCharsets.UTF_8);
         title = title.replace(' ', '_');
         String apiUrl = "https://oldschool.runescape.wiki/api.php?action=query&format=json&prop=info&titles="
@@ -209,7 +217,7 @@ public class DropFetcher
 
         Request req = new Request.Builder()
                 .url(apiUrl)
-                .header("User-Agent", "RuneLite-ChanceMan/2.6.1")
+                .header("User-Agent", USER_AGENT)
                 .build();
 
         try (Response res = httpClient.newCall(req).execute())
@@ -241,20 +249,17 @@ public class DropFetcher
         {
             log.warn("Error resolving NPC ID for {}", title, ex);
         }
-
         return 0;
     }
 
-    /**
-     * Query the wiki's search API for NPC names matching the provided text.
-     */
+    /** Query the wiki's search API for NPC names matching the provided text. */
     public List<String> searchNpcNames(String query)
     {
         String url = "https://oldschool.runescape.wiki/api.php?action=opensearch&format=json&limit=20&namespace=0&search="
                 + URLEncoder.encode(query, StandardCharsets.UTF_8);
         Request req = new Request.Builder()
                 .url(url)
-                .header("User-Agent", "RuneLite-ChanceMan/2.6.1")
+                .header("User-Agent", USER_AGENT)
                 .build();
         try (Response res = httpClient.newCall(req).execute())
         {
@@ -266,9 +271,8 @@ public class DropFetcher
             JsonArray arr = new JsonParser().parse(body).getAsJsonArray();
             JsonArray titles = arr.get(1).getAsJsonArray();
             List<String> names = new ArrayList<>();
-            for (JsonElement el : titles)
-            {
-                names.add(el.getAsString());
+            for (int i = 0; i < titles.size(); i++) {
+                names.add(titles.get(i).getAsString());
             }
             return names;
         }
@@ -301,7 +305,7 @@ public class DropFetcher
     {
         Request req = new Request.Builder()
                 .url(url)
-                .header("User-Agent", "RuneLite-ChanceMan/2.6.1")
+                .header("User-Agent", USER_AGENT)
                 .build();
         try (Response res = httpClient.newCall(req).execute())
         {
@@ -314,9 +318,7 @@ public class DropFetcher
         }
     }
 
-    /**
-     * Creates the fetch executor if it is missing or has been shut down.
-     */
+    /** Creates the fetch executor if it is missing or has been shut down. */
     public void startUp()
     {
         if (fetchExecutor == null || fetchExecutor.isShutdown() || fetchExecutor.isTerminated())
@@ -328,9 +330,7 @@ public class DropFetcher
         }
     }
 
-    /**
-     * Shut down the executor service.
-     */
+    /** Shut down the executor service. */
     public void shutdown()
     {
         if (fetchExecutor != null)

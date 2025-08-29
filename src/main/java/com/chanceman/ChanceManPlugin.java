@@ -1,6 +1,5 @@
 package com.chanceman;
 
-
 import com.chanceman.account.AccountChanged;
 import com.chanceman.account.AccountManager;
 import com.chanceman.drops.DropFetcher;
@@ -35,6 +34,7 @@ import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.ImageUtil;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.config.ConfigManager;
+
 import javax.inject.Inject;
 import javax.swing.*;
 import java.awt.image.BufferedImage;
@@ -49,40 +49,23 @@ import java.util.concurrent.Executors;
 )
 public class ChanceManPlugin extends Plugin
 {
-    @Inject
-    private Client client;
-    @Inject
-    private ClientThread clientThread;
-    @Inject
-    private ClientToolbar clientToolbar;
-    @Inject
-    private OverlayManager overlayManager;
-    @Inject
-    private ChatMessageManager chatMessageManager;
-    @Inject
-    private ItemManager itemManager;
-    @Inject
-    private ChanceManOverlay chanceManOverlay;
-    @Inject
-    private DropsTooltipOverlay dropsTooltipOverlay;
-    @Inject
-    private Gson gson;
-    @Inject
-    private ChanceManConfig config;
-    @Inject
-    private ConfigManager configManager;
-    @Inject
-    private AccountManager accountManager;
-    @Inject
-    private UnlockedItemsManager unlockedItemsManager;
-    @Inject
-    private RolledItemsManager rolledItemsManager;
-    @Inject
-    private RollAnimationManager rollAnimationManager;
-    @Inject
-    private EventBus eventBus;
-    @Inject
-    private ItemsFilter itemsFilter;
+    @Inject private Client client;
+    @Inject private ClientThread clientThread;
+    @Inject private ClientToolbar clientToolbar;
+    @Inject private OverlayManager overlayManager;
+    @Inject private ChatMessageManager chatMessageManager;
+    @Getter @Inject private ItemManager itemManager;
+    @Inject private ChanceManOverlay chanceManOverlay;
+    @Inject private DropsTooltipOverlay dropsTooltipOverlay;
+    @Inject private Gson gson;
+    @Inject private ChanceManConfig config;
+    @Inject private ConfigManager configManager;
+    @Inject private AccountManager accountManager;
+    @Inject private UnlockedItemsManager unlockedItemsManager;
+    @Inject private RolledItemsManager rolledItemsManager;
+    @Inject private RollAnimationManager rollAnimationManager;
+    @Inject private EventBus eventBus;
+    @Inject private ItemsFilter itemsFilter;
     @Inject private DropsTabUI dropsTabUI;
     @Inject private DropFetcher dropFetcher;
     @Inject private DropCache dropCache;
@@ -125,16 +108,19 @@ public class ChanceManPlugin extends Plugin
         featuresActive = true;
 
         getInjector().getInstance(ActionHandler.class).startUp();
+        accountManager.init();
         dropFetcher.startUp();
+        dropCache.startUp();
+        dropCache.getAllNpcData();
         eventBus.register(accountManager);
         overlayManager.add(chanceManOverlay);
         overlayManager.add(dropsTooltipOverlay);
         fileExecutor = Executors.newSingleThreadExecutor();
         unlockedItemsManager.setExecutor(fileExecutor);
+        rolledItemsManager.setExecutor(fileExecutor);
         itemDimmerController.setEnabled(config.dimLockedItemsEnabled());
         itemDimmerController.setDimOpacity(config.dimLockedItemsOpacity());
         eventBus.register(itemDimmerController);
-        rolledItemsManager.setExecutor(fileExecutor);
         rollAnimationManager.startUp();
         dropsTabUI.startUp();
 
@@ -159,8 +145,6 @@ public class ChanceManPlugin extends Plugin
                 .build();
         clientToolbar.addNavigation(navButton);
 
-        accountManager.init();
-        dropCache.getAllNpcData();
         eventBus.register(musicSearchButton);
         musicSearchButton.onStart();
     }
@@ -197,6 +181,7 @@ public class ChanceManPlugin extends Plugin
             fileExecutor = null;
         }
         dropFetcher.shutdown();
+        dropCache.shutdown();
 
         // reset panel/tradeable state
         chanceManPanel = null;
@@ -212,9 +197,7 @@ public class ChanceManPlugin extends Plugin
         else disableFeatures();
     }
 
-    /**
-     * Refreshes the list of tradeable item IDs based on the current configuration.
-     */
+    /** Refreshes the list of tradeable item IDs based on the current configuration. */
     public void refreshTradeableItems() {
         clientThread.invokeLater(() -> {
             allTradeableItems.clear();
@@ -257,6 +240,10 @@ public class ChanceManPlugin extends Plugin
             case "showRareDropTable":
             case "showGemDropTable":
                 dropCache.clearAllCaches();
+                refreshDropsViewerIfOpen();
+                break;
+            case "sortDropsByRarity":
+                refreshDropsViewerIfOpen();
                 break;
             case "dimLockedItemsEnabled":
             case "dimLockedItemsOpacity":
@@ -355,6 +342,7 @@ public class ChanceManPlugin extends Plugin
         {
             rollAnimationManager.enqueueRoll(canonicalItemId);
             rolledItemsManager.markRolled(canonicalItemId);
+            refreshDropsViewerIfOpen();
         }
     }
 
@@ -382,6 +370,7 @@ public class ChanceManPlugin extends Plugin
                     processed.add(canonicalId);
                 }
             }
+            if (!processed.isEmpty()) refreshDropsViewerIfOpen();
         }
     }
 
@@ -394,6 +383,16 @@ public class ChanceManPlugin extends Plugin
                 || worldTypes.contains(WorldType.PVP_ARENA)
                 || worldTypes.contains(WorldType.QUEST_SPEEDRUNNING)
                 || worldTypes.contains(WorldType.TOURNAMENT_WORLD));
+    }
+
+    private void refreshDropsViewerIfOpen()
+    {
+        if (musicWidgetController != null
+                && musicWidgetController.hasData()
+                && musicWidgetController.getCurrentData() != null)
+        {
+            musicWidgetController.override(musicWidgetController.getCurrentData());
+        }
     }
 
     public boolean isTradeable(int itemId)
@@ -412,7 +411,4 @@ public class ChanceManPlugin extends Plugin
     {
         return allTradeableItems.contains(itemId);
     }
-
-    public ItemManager getItemManager() { return itemManager; }
-
 }
