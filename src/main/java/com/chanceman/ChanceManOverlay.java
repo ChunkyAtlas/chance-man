@@ -36,15 +36,14 @@ public class ChanceManOverlay extends Overlay
     // Animation state
     private volatile boolean isAnimating = false;
     private long rollDuration;             // spin duration (ms)
-    private long highlightDuration = 2000; // highlight duration (ms)
-    private long rollStartTime = 0;
+    private long highlightDuration = 2000L; // unified highlight duration (ms)
+    private long rollStartTime = 0L;
 
-    // Spin parameters
+    // Spin parameters (px/sec)
     private float rollOffset = 0f;
     private float currentSpeed;
-    private final float initialSpeed = 975f;   // start speed (px/sec)
-    private final float deceleration = 425f;    // px/sec^2
-    private final float minSpeed = 120f;        // never go below this speed
+    private final float initialSpeed = 975f; // start speed (px/sec)
+    private final float minSpeed = 120f; // end speed at t=1 (px/sec)
 
     // Icon layout
     private final int iconCount = 5;
@@ -71,6 +70,9 @@ public class ChanceManOverlay extends Overlay
     // List of rolling items (synchronized for thread safety)
     private final List<Integer> rollingItems = Collections.synchronizedList(new ArrayList<>());
     private Supplier<Integer> randomLockedItemSupplier;
+
+    // Timekeeping for frame-independent animation
+    private long lastUpdateNanos = 0L;
 
     @Inject
     public ChanceManOverlay(Client client, ItemManager itemManager)
@@ -109,6 +111,7 @@ public class ChanceManOverlay extends Overlay
         this.currentSpeed = initialSpeed;
         this.randomLockedItemSupplier = randomLockedItemSupplier;
         this.isAnimating = true;
+        this.lastUpdateNanos = System.nanoTime();
 
         synchronized (rollingItems) {
             rollingItems.clear();
@@ -136,6 +139,12 @@ public class ChanceManOverlay extends Overlay
         return 0;
     }
 
+    /** Single source of truth for highlight duration (ms). */
+    public int getHighlightDurationMs()
+    {
+        return (int) highlightDuration;
+    }
+
     /**
      * Renders the roll animation overlay.
      *
@@ -153,8 +162,8 @@ public class ChanceManOverlay extends Overlay
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
-        long now = System.currentTimeMillis();
-        long elapsed = now - rollStartTime;
+        long nowMs = System.currentTimeMillis();
+        long elapsed = nowMs - rollStartTime;
         boolean inHighlightPhase = (elapsed > rollDuration);
 
         if (elapsed > rollDuration + highlightDuration)
@@ -162,6 +171,19 @@ public class ChanceManOverlay extends Overlay
             isAnimating = false;
             return null;
         }
+
+        long nowNanos = System.nanoTime();
+        float dt = 0f;
+        if (lastUpdateNanos != 0L)
+        {
+            dt = (nowNanos - lastUpdateNanos) / 1_000_000_000f;
+            // Clamp to avoid huge jumps if the game is paused or stalls
+            if (dt > 0.05f) dt = 0.05f; // max 50 ms step
+        }
+        lastUpdateNanos = nowNanos;
+        float t = (rollDuration > 0) ? Math.min(1f, elapsed / (float) rollDuration) : 1f;
+        float easedFactor = (float) Math.pow(1f - t, 3); // 1 at start -> 0 at end
+        currentSpeed = minSpeed + (initialSpeed - minSpeed) * easedFactor;
 
         int vpX = client.getViewportXOffset();
         int vpY = client.getViewportYOffset();
@@ -188,13 +210,14 @@ public class ChanceManOverlay extends Overlay
         synchronized (rollingItems) {
             if (!inHighlightPhase)
             {
-                float dt = 1f / 60f;
+                // Time-based motion using eased speed
                 rollOffset += currentSpeed * dt;
-                currentSpeed = Math.max(currentSpeed - deceleration * dt, minSpeed);
 
-                if (rollOffset >= (iconWidth + spacing))
+                // Handle long frames that may skip over multiple icon widths
+                float step = (iconWidth + spacing);
+                while (rollOffset >= step)
                 {
-                    rollOffset -= (iconWidth + spacing);
+                    rollOffset -= step;
                     if (!rollingItems.isEmpty())
                     {
                         rollingItems.remove(0);
