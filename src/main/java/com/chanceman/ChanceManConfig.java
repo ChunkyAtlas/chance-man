@@ -121,4 +121,27 @@ public interface ChanceManConfig extends Config
     {
         return Color.decode("#ff0000");
     }
+
+    @ConfigItem(
+            keyName = "dimLockedItemsEnabled",
+            name = "Dim locked items",
+            description = "Dim any item icons that have not been unlocked.",
+            position = 13
+    )
+    default boolean dimLockedItemsEnabled()
+    {
+        return true;
+    }
+
+    @net.runelite.client.config.Range(min = 0, max = 255)
+    @ConfigItem(
+            keyName = "dimLockedItemsOpacity",
+            name = "Dim opacity",
+            description = "0 = no dim (fully visible), 255 = fully transparent.",
+            position = 14
+    )
+    default int dimLockedItemsOpacity()
+    {
+        return 150;
+    }
 }

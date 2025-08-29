@@ -13,6 +13,7 @@ import com.chanceman.ui.DropsTooltipOverlay;
 import com.chanceman.ui.MusicWidgetController;
 import com.chanceman.ui.NpcSearchService;
 import com.chanceman.ui.MusicSearchButton;
+import com.chanceman.ui.ItemDimmerController;
 import com.google.gson.Gson;
 import com.google.inject.Provides;
 import lombok.Getter;
@@ -88,6 +89,7 @@ public class ChanceManPlugin extends Plugin
     @Inject private MusicWidgetController musicWidgetController;
     @Inject private NpcSearchService npcSearchService;
     @Inject private MusicSearchButton musicSearchButton;
+    @Inject private ItemDimmerController itemDimmerController;
 
     private ChanceManPanel chanceManPanel;
     private NavigationButton navButton;
@@ -129,6 +131,9 @@ public class ChanceManPlugin extends Plugin
         overlayManager.add(dropsTooltipOverlay);
         fileExecutor = Executors.newSingleThreadExecutor();
         unlockedItemsManager.setExecutor(fileExecutor);
+        itemDimmerController.setEnabled(config.dimLockedItemsEnabled());
+        itemDimmerController.setDimOpacity(config.dimLockedItemsOpacity());
+        eventBus.register(itemDimmerController);
         rolledItemsManager.setExecutor(fileExecutor);
         rollAnimationManager.startUp();
         dropsTabUI.startUp();
@@ -168,6 +173,7 @@ public class ChanceManPlugin extends Plugin
         musicSearchButton.onStop();
         eventBus.unregister(musicSearchButton);
         dropsTabUI.shutDown();
+        eventBus.unregister(itemDimmerController);
         eventBus.unregister(accountManager);
         getInjector().getInstance(ActionHandler.class).shutDown();
 
@@ -251,6 +257,11 @@ public class ChanceManPlugin extends Plugin
             case "showRareDropTable":
             case "showGemDropTable":
                 dropCache.clearAllCaches();
+                break;
+            case "dimLockedItemsEnabled":
+            case "dimLockedItemsOpacity":
+                itemDimmerController.setEnabled(config.dimLockedItemsEnabled());
+                itemDimmerController.setDimOpacity(config.dimLockedItemsOpacity());
                 break;
         }
     }
