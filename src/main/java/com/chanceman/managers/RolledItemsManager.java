@@ -1,7 +1,9 @@
 package com.chanceman.managers;
 
 import com.chanceman.account.AccountManager;
+import com.chanceman.persist.ConfigPersistence;
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -10,6 +12,7 @@ import javax.inject.Singleton;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.Reader;
+import java.lang.reflect.Type;
 import java.nio.file.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -21,17 +24,28 @@ import static net.runelite.client.RuneLite.RUNELITE_DIR;
  * Manages the set of rolled items with atomic persistence.
  * Provides thread-safe operations for marking items as rolled,
  * loading from and saving to disk with backups and atomic moves.
+ * Also mirrors state into RuneLite's ConfigManager (via ConfigPersistence) so, if the user
+ * has profile/cloud sync enabled, progress follows them across machines.
  */
 @Slf4j
 @Singleton
 public class RolledItemsManager
 {
     private static final int MAX_BACKUPS = 10;
+    private static final String CFG_KEY = "rolled";
+    private static final Type SET_TYPE = new TypeToken<Set<Integer>>(){}.getType();
+
     private final Set<Integer> rolledItems = Collections.synchronizedSet(new LinkedHashSet<>());
 
     @Inject private AccountManager accountManager;
     @Inject private Gson gson;
+    @Inject private ConfigPersistence configPersistence;
     @Setter private ExecutorService executor;
+
+    // Debounce ConfigManager writes to avoid churn
+    private volatile long lastConfigWriteMs = 0L;
+    // Only warn once if config mirroring fails
+    private volatile boolean configWriteWarned = false;
 
     /**
      * Atomically moves source→target, but if ATOMIC_MOVE fails retries a normal move with REPLACE_EXISTING.
@@ -71,7 +85,7 @@ public class RolledItemsManager
         return dir.resolve("chanceman_rolled.json");
     }
 
-      /**
+    /**
      * Checks if an item has been rolled.
      *
      * @param itemId The item ID.
@@ -97,7 +111,10 @@ public class RolledItemsManager
 
     /**
      * Loads the set of rolled items from disk into memory.
-     * If the file does not exist or is empty, initializes an empty set.
+     * If the file does not exist, avoid writing an empty file up-front:
+     *  - read local if present
+     *  - merge from config
+     *  - save only if the merged set is non-empty, OR if it's truly first-time (both sources empty).
      */
     public void loadRolledItems()
     {
@@ -117,31 +134,58 @@ public class RolledItemsManager
             return;
         }
 
-        if (!Files.exists(file))
-        {
-            // first run: write an empty file
-            saveRolledItems();
-            return;
-        }
+        final boolean fileExisted = Files.exists(file);
 
-        try (Reader r = Files.newBufferedReader(file))
+        // Load local JSON if present
+        if (fileExisted)
         {
-            Set<Integer> loaded = gson.fromJson(r,
-                    new com.google.gson.reflect.TypeToken<Set<Integer>>() {}.getType());
-            if (loaded != null)
+            try (Reader r = Files.newBufferedReader(file))
             {
-                rolledItems.addAll(loaded);
+                Set<Integer> loaded = gson.fromJson(r, SET_TYPE);
+                if (loaded != null)
+                {
+                    rolledItems.addAll(loaded);
+                }
+            }
+            catch (IOException e)
+            {
+                log.error("Error loading rolled items", e);
             }
         }
-        catch (IOException e)
+
+        // Merge from ConfigManager (always)
+        String player = accountManager.getPlayerName();
+        int beforeMerge = rolledItems.size();
+        Set<Integer> fromCfg = configPersistence.readSet(player, CFG_KEY);
+        rolledItems.addAll(fromCfg);
+        int afterMerge = rolledItems.size();
+
+        if (fileExisted)
         {
-            log.error("Error loading rolled items", e);
+            if (afterMerge > beforeMerge)
+            {
+                saveRolledItems();
+            }
+        }
+        else
+        {
+            if (afterMerge > 0)
+            {
+                // New machine but had cloud/config data → create local file with merged contents
+                saveRolledItems();
+            }
+            else
+            {
+                // Truly first-time user: create an empty local JSON once
+                saveRolledItems();
+            }
         }
     }
 
     /**
      * Saves the current set of rolled items to disk.
      * Uses a temporary file and backups for atomicity and data safety.
+     * Also mirrors into ConfigManager (debounced).
      */
     public void saveRolledItems()
     {
@@ -154,7 +198,7 @@ public class RolledItemsManager
             }
             catch (IOException ioe)
             {
-                log.error("Could not resolve rolled‑items path", ioe);
+                log.error("Could not resolve rolled-items path", ioe);
                 return;
             }
 
@@ -187,10 +231,40 @@ public class RolledItemsManager
 
                 // 3) atomically replace .json
                 safeMove(tmp, file, StandardCopyOption.ATOMIC_MOVE);
+
+                // 4) mirror to ConfigManager (debounced)
+                mirrorToConfigDebounced();
             }
             catch (IOException e)
             {
                 log.error("Error saving rolled items", e);
+            }
+        });
+    }
+
+    private void mirrorToConfigDebounced()
+    {
+        long now = System.currentTimeMillis();
+        if (now - lastConfigWriteMs < 3000) return; // 3s debounce
+        lastConfigWriteMs = now;
+
+        String player = accountManager.getPlayerName();
+        if (player == null || player.isEmpty()) return;
+
+        // snapshot to avoid concurrent modification on the synchronized set
+        Set<Integer> snapshot = new LinkedHashSet<>(rolledItems);
+        executor.submit(() -> {
+            try
+            {
+                configPersistence.writeSet(player, CFG_KEY, snapshot);
+            }
+            catch (Exception e)
+            {
+                if (!configWriteWarned)
+                {
+                    configWriteWarned = true;
+                    log.warn("ChanceMan: failed to mirror rolled set to ConfigManager (local saves are intact).", e);
+                }
             }
         });
     }

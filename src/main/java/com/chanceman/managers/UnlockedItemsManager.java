@@ -1,7 +1,9 @@
 package com.chanceman.managers;
 
 import com.chanceman.account.AccountManager;
+import com.chanceman.persist.ConfigPersistence;
 import com.google.gson.Gson;
+import com.google.gson.reflect.TypeToken;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 
@@ -10,6 +12,7 @@ import javax.inject.Singleton;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.Reader;
+import java.lang.reflect.Type;
 import java.nio.file.*;
 import java.text.SimpleDateFormat;
 import java.util.*;
@@ -18,19 +21,28 @@ import java.util.concurrent.ExecutorService;
 import static net.runelite.client.RuneLite.RUNELITE_DIR;
 
 /**
- * Manages the set of unlocked items with robust, atomic persistence and 10‑file backup rotation.
+ * Manages the set of unlocked items with robust, atomic persistence and 10-file backup rotation.
+ * Also mirrors the set into RuneLite's ConfigManager (via ConfigPersistence) for cross-machine sync
+ * when RuneLite profile/cloud sync is enabled.
  */
 @Slf4j
 @Singleton
 public class UnlockedItemsManager
 {
     private static final int MAX_BACKUPS = 10;
+    private static final String CFG_KEY = "unlocked";
+    private static final Type SET_TYPE = new TypeToken<Set<Integer>>(){}.getType();
 
     private final Set<Integer> unlockedItems = Collections.synchronizedSet(new LinkedHashSet<>());
 
     @Inject private AccountManager accountManager;
-    @Inject private Gson gson;
+    @Inject private Gson gson;                      // reuse injected singleton; do NOT new Gson()
+    @Inject private ConfigPersistence configPersistence;
     @Setter private ExecutorService executor;
+
+    // Debounce config writes + warn-once
+    private volatile long lastConfigWriteMs = 0L;
+    private volatile boolean configWriteWarned = false;
 
     public boolean ready()
     {
@@ -83,6 +95,10 @@ public class UnlockedItemsManager
         }
     }
 
+    /**
+     * Load unlocked items from disk, then union with any config-stored set.
+     * Avoids writing an empty file unless it's truly first-time usage.
+     */
     public void loadUnlockedItems()
     {
         if (!ready())
@@ -101,28 +117,56 @@ public class UnlockedItemsManager
             return;
         }
 
-        if (!Files.exists(file))
-        {
-            // first‑run: empty set → write an empty JSON file
-            saveUnlockedItems();
-            return;
-        }
+        final boolean fileExisted = Files.exists(file);
 
-        try (Reader r = Files.newBufferedReader(file))
+        // Load local JSON if present
+        if (fileExisted)
         {
-            Set<Integer> loaded = gson.fromJson(r,
-                    new com.google.gson.reflect.TypeToken<Set<Integer>>() {}.getType());
-            if (loaded != null)
+            try (Reader r = Files.newBufferedReader(file))
             {
-                unlockedItems.addAll(loaded);
+                Set<Integer> loaded = gson.fromJson(r, SET_TYPE);
+                if (loaded != null)
+                {
+                    unlockedItems.addAll(loaded);
+                }
+            }
+            catch (IOException e)
+            {
+                log.error("Error loading unlocked items", e);
             }
         }
-        catch (IOException e)
+
+        // Merge from ConfigManager
+        String player = accountManager.getPlayerName();
+        int beforeMerge = unlockedItems.size();
+        Set<Integer> fromCfg = configPersistence.readSet(player, CFG_KEY);
+        unlockedItems.addAll(fromCfg);
+        int afterMerge = unlockedItems.size();
+
+        if (fileExisted)
         {
-            log.error("Error loading unlocked items", e);
+            if (afterMerge > beforeMerge)
+            {
+                saveUnlockedItems();
+            }
+        }
+        else
+        {
+            if (afterMerge > 0)
+            {
+                saveUnlockedItems();
+            }
+            else
+            {
+                // truly first-time user
+                saveUnlockedItems();
+            }
         }
     }
 
+    /**
+     * Save to disk (atomic + backups), then mirror to ConfigManager (debounced).
+     */
     public void saveUnlockedItems()
     {
         executor.submit(() ->
@@ -167,6 +211,9 @@ public class UnlockedItemsManager
 
                 // 3) atomically replace .json with .tmp
                 safeMove(tmp, file, StandardCopyOption.ATOMIC_MOVE);
+
+                // 4) mirror to ConfigManager (debounced)
+                mirrorToConfigDebounced();
             }
             catch (IOException e)
             {
@@ -175,6 +222,31 @@ public class UnlockedItemsManager
         });
     }
 
+    private void mirrorToConfigDebounced()
+    {
+        long now = System.currentTimeMillis();
+        if (now - lastConfigWriteMs < 3000) return; // ~3s debounce
+        lastConfigWriteMs = now;
+
+        String player = accountManager.getPlayerName();
+        if (player == null || player.isEmpty()) return;
+
+        Set<Integer> snapshot = new LinkedHashSet<>(unlockedItems);
+        executor.submit(() -> {
+            try
+            {
+                configPersistence.writeSet(player, CFG_KEY, snapshot);
+            }
+            catch (Exception e)
+            {
+                if (!configWriteWarned)
+                {
+                    configWriteWarned = true;
+                    log.warn("ChanceMan: failed to mirror unlocked set to ConfigManager (local saves are intact).", e);
+                }
+            }
+        });
+    }
 
     /**
      * Retrieves an unmodifiable set of unlocked item IDs.
