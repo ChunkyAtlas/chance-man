@@ -118,6 +118,13 @@ public class ChanceManPlugin extends Plugin
         fileExecutor = Executors.newSingleThreadExecutor();
         unlockedItemsManager.setExecutor(fileExecutor);
         rolledItemsManager.setExecutor(fileExecutor);
+
+        if (accountManager.ready())
+        {
+            unlockedItemsManager.loadUnlockedItems();
+            rolledItemsManager.loadRolledItems();
+        }
+
         itemDimmerController.setEnabled(config.dimLockedItemsEnabled());
         itemDimmerController.setDimOpacity(config.dimLockedItemsOpacity());
         eventBus.register(itemDimmerController);
@@ -153,6 +160,17 @@ public class ChanceManPlugin extends Plugin
     {
         if (!featuresActive) return;
         featuresActive = false;
+
+        try
+        {
+            if (unlockedItemsManager != null) unlockedItemsManager.flushIfDirtyOnExit();
+            if (rolledItemsManager != null) rolledItemsManager.flushIfDirtyOnExit();
+        }
+        catch (Exception e)
+        {
+            // Non-fatal: continue shutdown
+        }
+
         clientThread.invokeLater(musicWidgetController::restore);
         musicSearchButton.onStop();
         eventBus.unregister(musicSearchButton);
@@ -221,7 +239,6 @@ public class ChanceManPlugin extends Plugin
             }
         });
     }
-
 
     @Subscribe
     public void onConfigChanged(net.runelite.client.events.ConfigChanged event)
