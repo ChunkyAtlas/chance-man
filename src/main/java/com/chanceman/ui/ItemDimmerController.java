@@ -5,7 +5,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
-import net.runelite.api.events.ClientTick;
+import net.runelite.api.ScriptID;
+import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
@@ -17,7 +18,7 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Dims the actual item icon widgets (no overlay).
  * - Only dims when item is TRADEABLE && LOCKED.
- * - Reapplies every client tick so inventory/bank scripts can't override it.
+ * - Applies after inventory/bank scripts so repaint doesn't cause flicker.
  */
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
@@ -33,20 +34,37 @@ public class ItemDimmerController
 
     private final ConcurrentHashMap<Integer, Boolean> tradeableCache = new ConcurrentHashMap<>();
 
-    public boolean isEnabledUnsafe() { return enabled; }
-    public int getDimOpacityUnsafe() { return dimOpacity; }
-
     public void setDimOpacity(int opacity) { this.dimOpacity = Math.max(0, Math.min(255, opacity)); }
 
+    /**
+     * Run AFTER specific client scripts finish rebuilding items so the opacity writes win the frame.
+     */
     @Subscribe
-    public void onClientTick(ClientTick e)
+    public void onScriptPostFired(ScriptPostFired e)
     {
         if (!enabled || client.getGameState() != GameState.LOGGED_IN) return;
 
+        // Avoid fighting rapid widget mutations during user interactions.
+        if (client.isDraggingWidget() || client.isMenuOpen()) return;
+
+        switch (e.getScriptId())
+        {
+            case ScriptID.INVENTORY_DRAWITEM:
+            case ScriptID.BANKMAIN_BUILD:
+            case ScriptID.BANKMAIN_FINISHBUILDING:
+            case ScriptID.BANKMAIN_SEARCH_REFRESH:
+            case ScriptID.BANK_DEPOSITBOX_INIT:
+                dimAllRoots();
+                break;
+            default:
+        }
+    }
+
+    private void dimAllRoots()
+    {
         final Widget[] roots = client.getWidgetRoots();
         if (roots == null) return;
 
-        // Re-apply every tick; this keeps inventory/bank in sync even after their scripts repaint.
         for (Widget root : roots)
         {
             if (root != null) walkAndDim(root);
@@ -60,14 +78,7 @@ public class ItemDimmerController
         final int itemId = w.getItemId();
         if (itemId > 0)
         {
-            if (shouldDim(itemId))
-            {
-                w.setOpacity(dimOpacity);
-            }
-            else
-            {
-                w.setOpacity(0);
-            }
+            w.setOpacity(shouldDim(itemId) ? dimOpacity : 0);
         }
 
         final Widget[] dyn = w.getDynamicChildren();
