@@ -6,6 +6,7 @@ import lombok.Setter;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.ScriptID;
+import net.runelite.api.events.BeforeRender;
 import net.runelite.api.events.ScriptPostFired;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.eventbus.Subscribe;
@@ -18,7 +19,8 @@ import java.util.concurrent.ConcurrentHashMap;
 /**
  * Dims the actual item icon widgets (no overlay).
  * - Only dims when item is TRADEABLE && LOCKED.
- * - Applies after inventory/bank scripts so repaint doesn't cause flicker.
+ * - Runs at BeforeRender so scripts in the same frame can't overwrite opacity.
+ * - No deprecated getWidget / WidgetInfo usage.
  */
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
@@ -34,18 +36,15 @@ public class ItemDimmerController
 
     private final ConcurrentHashMap<Integer, Boolean> tradeableCache = new ConcurrentHashMap<>();
 
+    // Set by script events; consumed on BeforeRender (once per frame).
+    private volatile boolean uiDirty = false;
+
     public void setDimOpacity(int opacity) { this.dimOpacity = Math.max(0, Math.min(255, opacity)); }
 
-    /**
-     * Run AFTER specific client scripts finish rebuilding items so the opacity writes win the frame.
-     */
     @Subscribe
     public void onScriptPostFired(ScriptPostFired e)
     {
         if (!enabled || client.getGameState() != GameState.LOGGED_IN) return;
-
-        // Avoid fighting rapid widget mutations during user interactions.
-        if (client.isDraggingWidget() || client.isMenuOpen()) return;
 
         switch (e.getScriptId())
         {
@@ -54,14 +53,24 @@ public class ItemDimmerController
             case ScriptID.BANKMAIN_FINISHBUILDING:
             case ScriptID.BANKMAIN_SEARCH_REFRESH:
             case ScriptID.BANK_DEPOSITBOX_INIT:
-                dimAllRoots();
+                uiDirty = true;
                 break;
             default:
+                // ignore others
         }
     }
 
-    private void dimAllRoots()
+    /**
+     * Last chance before drawing this frame; safe place to enforce opacity without races.
+     */
+    @Subscribe
+    public void onBeforeRender(BeforeRender e)
     {
+        if (!enabled || !uiDirty || client.getGameState() != GameState.LOGGED_IN) return;
+        if (client.isDraggingWidget() || client.isMenuOpen()) return;
+
+        uiDirty = false;
+
         final Widget[] roots = client.getWidgetRoots();
         if (roots == null) return;
 
@@ -78,7 +87,11 @@ public class ItemDimmerController
         final int itemId = w.getItemId();
         if (itemId > 0)
         {
-            w.setOpacity(shouldDim(itemId) ? dimOpacity : 0);
+            final int target = shouldDim(itemId) ? dimOpacity : 0;
+            if (w.getOpacity() != target)
+            {
+                w.setOpacity(target);
+            }
         }
 
         final Widget[] dyn = w.getDynamicChildren();
@@ -93,10 +106,7 @@ public class ItemDimmerController
 
     private boolean shouldDim(int rawItemId)
     {
-        // Never dim untradeables
         if (!isTradeable(rawItemId)) return false;
-
-        // Dim only when locked
         return !isUnlocked(rawItemId);
     }
 

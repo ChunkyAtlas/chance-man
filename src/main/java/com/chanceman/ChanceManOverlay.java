@@ -61,7 +61,7 @@ public class ChanceManOverlay extends Overlay
     private final int offsetFromTop = 20;
 
     // Shift the entire background box left by 20 pixels
-    private final int boxShift = -20;
+    private final int boxShift = -26;
 
     // For drawing the background
     private final int cornerRadius = 10;

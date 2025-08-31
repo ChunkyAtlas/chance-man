@@ -22,6 +22,7 @@
 
 - **Show Drops Menu**
     - Right-click an NPC and choose **Show Drops** to fetch its drop table from the wiki.
+    - Use the search button in the Music tab to look up anything with a droptable, or NPC by name, level, or ID.
     - The Music tab displays icons and a progress bar for the NPC's drops, and hovering an icon shows its name.
 
 - **Rolled & Unlocked Panels**
@@ -34,11 +35,15 @@
     - The Discord icon links to the community server for help and discussion and good vibes.
 
 - **Persistence**
-    - Each player’s rolled/unlocked data is stored locally in JSON files, ensuring you don’t lose progress between sessions.
+    - Each player’s rolled/unlocked data is stored locally in JSON files and mirrored to RuneLite’s cloud profile so progress syncs across machines.
     - Data is automatically saved and loaded for each character name.
 
 - **Grand Exchange Search Filtering**
     - Locked items are hidden in GE search results and dimmed until you unlock them
+
+- **Locked Item Dimming**
+    - Locked item icons across interfaces are dimmed to clearly show they are unusable until rolled.
+    - The dimming strength is configurable in the plugin settings.
 
 ## Configuration
 
@@ -57,6 +62,8 @@ Open RuneLite’s plugin settings and select **ChanceMan** to adjust these optio
 - **Show Rare Drop Table** – Toggle to display items from the rare drop table in the **Show Drops** menu.
 - **Show Gem Drop Table** – Toggle to display items from the gem drop table in the **Show Drops** menu.
   Changing either option will clear cached drop data so updated tables are fetched.
+- **Dim locked items** – Dim the icons of locked items throughout the game interface.
+- **Dim opacity** – Control how transparent the dimming effect is (0 = no dim, 255 = fully transparent).
 
 ## Usage
 
