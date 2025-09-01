@@ -20,18 +20,17 @@ import java.util.concurrent.ExecutorService;
 
 import static net.runelite.client.RuneLite.RUNELITE_DIR;
 
-/**
- * Manages the set of rolled items with atomic persistence and 10-file backup rotation.
- * Uses last-writer-wins (LWW) stamped cloud sync:
- *  - On load: compare local file mtime vs cloud ts and choose the newer.
- *  - On save: write to disk atomically, then mirror stamped data to cloud (debounced for normal saves).
- */
 @Slf4j
 @Singleton
 public class RolledItemsManager
 {
     private static final int MAX_BACKUPS = 10;
     private static final String CFG_KEY = "rolled";
+    private static final String BACKUP_TS_PATTERN = "yyyyMMddHHmmss";
+    private static final long CONFIG_DEBOUNCE_MS = 3000L;
+    private static final long SELF_WRITE_GRACE_MS = 1500L;
+    private static final long FS_DEBOUNCE_MS = 200L;
+    private static final String FILE_NAME = "chanceman_rolled.json";
     private static final Type SET_TYPE = new TypeToken<Set<Integer>>(){}.getType();
 
     private final Set<Integer> rolledItems = Collections.synchronizedSet(new LinkedHashSet<>());
@@ -39,242 +38,165 @@ public class RolledItemsManager
     @Inject private AccountManager accountManager;
     @Inject private Gson gson;
     @Inject private ConfigPersistence configPersistence;
-    @Setter private ExecutorService executor;
-
-    // Debounce ConfigManager writes to avoid churn
+    @Setter private ExecutorService executor; // file writes & cloud mirror
+    @Setter private Runnable onChange; // optional UI refresh
     private volatile long lastConfigWriteMs = 0L;
-    // Only warn once if config mirroring fails
     private volatile boolean configWriteWarned = false;
-    // Track if there are unsaved in-memory changes
     private volatile boolean dirty = false;
+    private WatchService watchService;
+    private volatile boolean watcherRunning = false;
+    private volatile long lastSelfWriteMs = 0L;
+    private Thread watcherThread;
 
-    /**
-     * Atomically moves source→target, but if ATOMIC_MOVE fails retries a normal move with REPLACE_EXISTING.
-     */
-    private void safeMove(Path source, Path target, CopyOption... opts) throws IOException
-    {
-        try
-        {
-            Files.move(source, target, opts);
-        }
-        catch (AtomicMoveNotSupportedException | AccessDeniedException ex)
-        {
-            // remove ATOMIC_MOVE, add REPLACE_EXISTING
-            Set<CopyOption> fallback = new HashSet<>(Arrays.asList(opts));
-            fallback.remove(StandardCopyOption.ATOMIC_MOVE);
-            fallback.add(StandardCopyOption.REPLACE_EXISTING);
-            Files.move(source, target, fallback.toArray(new CopyOption[0]));
-        }
-    }
+    public boolean isRolled(int itemId) { return rolledItems.contains(itemId); }
+    public Set<Integer> getRolledItems() { return Collections.unmodifiableSet(rolledItems); }
 
-    /**
-     * Builds the file path for the current account's rolled-items JSON file.
-     *
-     * @return path to the rolled items JSON file
-     */
-    private Path getFilePath() throws IOException
-    {
-        String name = accountManager.getPlayerName();
-        if (name == null)
-        {
-            throw new IOException("Player name is null");
-        }
-        Path dir = RUNELITE_DIR.toPath()
-                .resolve("chanceman")
-                .resolve(name);
-        Files.createDirectories(dir);
-        return dir.resolve("chanceman_rolled.json");
-    }
-
-    /**
-     * Checks if an item has been rolled.
-     *
-     * @param itemId The item ID.
-     * @return true if the item has been rolled, false otherwise.
-     */
-    public boolean isRolled(int itemId)
-    {
-        return rolledItems.contains(itemId);
-    }
-
-    /**
-     * Marks an item as rolled and triggers an asynchronous save (debounced cloud mirror).
-     *
-     * @param itemId The item ID to mark as rolled.
-     */
     public void markRolled(int itemId)
     {
         if (rolledItems.add(itemId))
         {
             dirty = true;
+            safeNotifyChange();
             saveRolledItems();
         }
     }
 
-    /**
-     * Loads the set of rolled items using stamped LWW reconciliation:
-     *  - Read local file (+mtime) and cloud stamped set (+ts).
-     *  - If local mtime > cloud ts → local wins (push local to cloud).
-     *  - If cloud ts > local mtime → cloud wins (write to local).
-     *  - If equal/unknown → prefer local; create file if missing.
-     */
+    /** Initial load + LWW reconciliation. */
     public void loadRolledItems()
     {
-        if (accountManager.getPlayerName() == null)
-        {
-            return;
-        }
+        reconcileWithCloud(false);
+        safeNotifyChange();
+    }
 
-        Path file;
+    /** Normal save: disk + debounced cloud with current time. */
+    public void saveRolledItems()
+    {
+        saveInternal(System.currentTimeMillis(), true);
+    }
+
+    /** Start watching the JSON on a dedicated daemon thread. */
+    public void startWatching()
+    {
+        if (watcherRunning) return;
+        Path file = safeGetFilePathOrNull();
+        if (file == null) return;
+
         try
         {
-            file = getFilePath();
+            watchService = FileSystems.getDefault().newWatchService();
+            file.getParent().register(
+                    watchService,
+                    StandardWatchEventKinds.ENTRY_CREATE,
+                    StandardWatchEventKinds.ENTRY_MODIFY,
+                    StandardWatchEventKinds.ENTRY_DELETE
+            );
         }
-        catch (IOException ioe)
+        catch (IOException e)
         {
+            closeWatchServiceQuietly();
+            log.error("Rolled watcher: could not register", e);
             return;
         }
 
-        final boolean fileExisted = Files.exists(file);
+        watcherRunning = true;
+        final String target = file.getFileName().toString();
 
-        // Load local JSON if present
-        Set<Integer> local = new LinkedHashSet<>();
-        if (fileExisted)
+        watcherThread = new Thread(() -> runWatcherLoop(target), "ChanceMan-Rolled-Watcher");
+        watcherThread.setDaemon(true);
+        watcherThread.start();
+    }
+
+    /** Stop watching the JSON. */
+    public void stopWatching()
+    {
+        watcherRunning = false;
+        if (watcherThread != null) watcherThread.interrupt();
+        closeWatchServiceQuietly();
+        watcherThread = null;
+    }
+
+    /** Flush synchronously on shutdown if dirty. */
+    public void flushIfDirtyOnExit()
+    {
+        if (!dirty) return;
+        Path file = safeGetFilePathOrNull();
+        if (file == null) return;
+
+        try
         {
-            try (Reader r = Files.newBufferedReader(file))
-            {
-                Set<Integer> loaded = gson.fromJson(r, SET_TYPE);
-                if (loaded != null)
-                {
-                    local.addAll(loaded);
-                }
-            }
-            catch (IOException e)
-            {
-                log.error("Error loading rolled items", e);
-            }
+            rotateBackupIfExists(file);
+            writeJsonAtomic(file, rolledItems);
+            mirrorToCloud(System.currentTimeMillis(), false);
+            dirty = false;
         }
-
-        long localMtime = 0L;
-        if (fileExisted)
+        catch (IOException e)
         {
-            try
-            {
-                localMtime = Files.getLastModifiedTime(file).toMillis();
-            }
-            catch (IOException ignored)
-            {
-                localMtime = 0L;
-            }
+            log.error("Shutdown flush failed for rolled items (local saves may be stale).", e);
         }
-
-        // Load cloud (stamped)
-        String player = accountManager.getPlayerName();
-        ConfigPersistence.StampedSet cloudStamped = configPersistence.readStampedSet(player, CFG_KEY);
-        Set<Integer> cloud = new LinkedHashSet<>(cloudStamped.data);
-        long cloudTs = cloudStamped.ts;
-
-        // Decide winner (LWW)
-        Set<Integer> winner;
-        Long winnerStamp = null; // stamp to write to cloud if we persist
-        boolean needPersist = false;
-
-        if (localMtime > cloudTs)
+        catch (Exception e)
         {
-            // Local modified later (manual edits welcome) → push local to cloud
-            winner = local;
-            winnerStamp = localMtime;
-            needPersist = true;
-        }
-        else if (cloudTs > localMtime)
-        {
-            // Cloud newer → adopt cloud locally
-            winner = cloud;
-            winnerStamp = cloudTs;
-            needPersist = true; // write to disk to reflect cloud
-        }
-        else
-        {
-            // Equal or unknown (ts=0). Prefer local state; if no file existed, create it.
-            winner = local;
-            needPersist = !fileExisted;
-            if (!fileExisted && winner.isEmpty())
-            {
-                needPersist = true; // create an empty file once
-            }
-        }
-
-        // Apply to memory
-        rolledItems.clear();
-        rolledItems.addAll(winner);
-
-        // Persist if needed (bypass debounce during reconciliation)
-        if (needPersist)
-        {
-            long stampToUse = (winnerStamp != null) ? winnerStamp : System.currentTimeMillis();
-            saveRolledItemsWithExplicitStamp(stampToUse);
-            dirty = false; // reconciled and persisted
-        }
-        else
-        {
-            dirty = false; // clean after no-op load
+            log.error("Shutdown flush: failed to mirror rolled set to ConfigManager.", e);
         }
     }
 
-    /**
-     * Saves the current set of rolled items to disk.
-     * Uses a temporary file and backups for atomicity and data safety.
-     * Mirrors into stamped ConfigManager (debounced).
-     */
-    public void saveRolledItems()
+    private void reconcileWithCloud(boolean runtime)
     {
-        final long now = System.currentTimeMillis();
-        executor.submit(() ->
+        String player = accountManager.getPlayerName();
+        if (player == null) return;
+
+        Path file = safeGetFilePathOrNull();
+        if (file == null) return;
+
+        boolean fileExisted = Files.exists(file);
+
+        Set<Integer> local = readLocalJson(file);
+        long localMtime = fileExisted ? safeLastModified(file) : 0L;
+
+        ConfigPersistence.StampedSet cloudStamped = readCloud(player);
+        Set<Integer> cloud = new LinkedHashSet<>(cloudStamped.data);
+        long cloudTs = cloudStamped.ts;
+
+        // LWW
+        Set<Integer> winner;
+        Long winnerStamp = null;
+        boolean needPersist;
+
+        if (localMtime > cloudTs) { winner = local;  winnerStamp = localMtime; needPersist = true; } // push to cloud
+        else if (cloudTs > localMtime) { winner = cloud;  winnerStamp = cloudTs;    needPersist = true; } // pull to disk
+        else { winner = local;  needPersist = !fileExisted; } // create disk if missing
+
+        rolledItems.clear();
+        rolledItems.addAll(winner);
+
+        if (needPersist)
         {
-            Path file;
-            try
+            long stamp = (winnerStamp != null) ? winnerStamp : System.currentTimeMillis();
+            saveInternal(stamp, false); // bypass debounce during reconcile
+        }
+        dirty = false;
+    }
+
+    /** Disk write + cloud mirror (debounced or immediate). */
+    private void saveInternal(long stampMillis, boolean debounced)
+    {
+        if (!isExecutorAvailable())
+        {
+            log.error("RolledItemsManager: executor unavailable; skipping save");
+            return;
+        }
+
+        executor.submit(() -> {
+            Path file = safeGetFilePathOrNull();
+            if (file == null)
             {
-                file = getFilePath();
-            }
-            catch (IOException ioe)
-            {
-                log.error("Could not resolve rolled-items path", ioe);
+                log.error("RolledItemsManager: file path unavailable; skipping save");
                 return;
             }
-
             try
             {
-                // 1) backup current .json
-                if (Files.exists(file))
-                {
-                    Path backups = file.getParent().resolve("backups");
-                    Files.createDirectories(backups);
-                    String ts = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-                    Path bak = backups.resolve(file.getFileName() + "." + ts + ".bak");
-                    safeMove(file, bak,
-                            StandardCopyOption.ATOMIC_MOVE,
-                            StandardCopyOption.REPLACE_EXISTING);
-                    // prune old backups…
-                    Files.list(backups)
-                            .filter(p -> p.getFileName().toString().startsWith(file.getFileName() + "."))
-                            .sorted(Comparator.comparing(Path::getFileName).reversed())
-                            .skip(MAX_BACKUPS)
-                            .forEach(p -> p.toFile().delete());
-                }
-
-                // 2) write new JSON to .tmp
-                Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-                try (BufferedWriter w = Files.newBufferedWriter(tmp))
-                {
-                    gson.toJson(rolledItems, w);
-                }
-
-                // 3) atomically replace .json
-                safeMove(tmp, file, StandardCopyOption.ATOMIC_MOVE);
-
-                // 4) mirror to ConfigManager (debounced) with current time
-                mirrorToConfigDebounced(now);
-
+                rotateBackupIfExists(file);
+                writeJsonAtomic(file, rolledItems);
+                mirrorToCloud(stampMillis, debounced);
                 dirty = false;
             }
             catch (IOException e)
@@ -284,186 +206,197 @@ public class RolledItemsManager
         });
     }
 
-    /**
-     * Save + mirror immediately with an explicit stamp (bypasses debounce).
-     * Used during load-time reconciliation to push/pull authoritative state right away.
-     */
-    private void saveRolledItemsWithExplicitStamp(long stampMillis)
-    {
-        executor.submit(() ->
-        {
-            Path file;
-            try
-            {
-                file = getFilePath();
-            }
-            catch (IOException ioe)
-            {
-                log.error("Could not resolve rolled-items path", ioe);
-                return;
-            }
-
-            try
-            {
-                // 1) backup current .json
-                if (Files.exists(file))
-                {
-                    Path backups = file.getParent().resolve("backups");
-                    Files.createDirectories(backups);
-                    String ts = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-                    Path bak = backups.resolve(file.getFileName() + "." + ts + ".bak");
-                    safeMove(file, bak,
-                            StandardCopyOption.ATOMIC_MOVE,
-                            StandardCopyOption.REPLACE_EXISTING);
-                    // prune old backups…
-                    Files.list(backups)
-                            .filter(p -> p.getFileName().toString().startsWith(file.getFileName() + "."))
-                            .sorted(Comparator.comparing(Path::getFileName).reversed())
-                            .skip(MAX_BACKUPS)
-                            .forEach(p -> p.toFile().delete());
-                }
-
-                // 2) write new JSON to .tmp
-                Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-                try (BufferedWriter w = Files.newBufferedWriter(tmp))
-                {
-                    gson.toJson(rolledItems, w);
-                }
-
-                // 3) atomically replace .json
-                safeMove(tmp, file, StandardCopyOption.ATOMIC_MOVE);
-
-                // 4) mirror to ConfigManager immediately with explicit stamp
-                String player = accountManager.getPlayerName();
-                if (player != null && !player.isEmpty())
-                {
-                    try
-                    {
-                        Set<Integer> snapshot = new LinkedHashSet<>(rolledItems);
-                        configPersistence.writeStampedSet(player, CFG_KEY, snapshot, stampMillis);
-                    }
-                    catch (Exception e)
-                    {
-                        if (!configWriteWarned)
-                        {
-                            configWriteWarned = true;
-                            log.warn("ChanceMan: failed to mirror rolled set to ConfigManager (local saves are intact).", e);
-                        }
-                    }
-                }
-
-                dirty = false; // explicit flush completed
-            }
-            catch (IOException e)
-            {
-                log.error("Error saving rolled items", e);
-            }
-        });
-    }
-
-    private void mirrorToConfigDebounced(long stampMillis)
+    private void mirrorToCloud(long stampMillis, boolean debounced)
     {
         long now = System.currentTimeMillis();
-        if (now - lastConfigWriteMs < 3000) return; // 3s debounce
+        if (debounced && (now - lastConfigWriteMs < CONFIG_DEBOUNCE_MS)) return;
         lastConfigWriteMs = now;
 
         String player = accountManager.getPlayerName();
-        if (player == null || player.isEmpty()) return;
+        if (player == null || player.isEmpty() || executor == null) return;
 
-        // snapshot to avoid concurrent modification on the synchronized set
         Set<Integer> snapshot = new LinkedHashSet<>(rolledItems);
         executor.submit(() -> {
             try
             {
-                configPersistence.writeStampedSet(player, CFG_KEY, snapshot, stampMillis);
+                // Guard against out-of-order writes across machines/threads
+                configPersistence.writeStampedSetIfNewer(player, CFG_KEY, snapshot, stampMillis);
             }
             catch (Exception e)
             {
                 if (!configWriteWarned)
                 {
                     configWriteWarned = true;
-                    log.warn("ChanceMan: failed to mirror rolled set to ConfigManager (local saves are intact).", e);
+                    log.error("ChanceMan: failed to mirror rolled set to ConfigManager (local saves intact).", e);
                 }
             }
         });
     }
 
-    /**
-     * Flush synchronously on shutdown if there are unsaved changes.
-     * Bypasses executor and debounce; writes disk + cloud with current time.
-     */
-    public void flushIfDirtyOnExit()
+    private boolean isExecutorAvailable()
     {
-        if (!dirty) return;
-
-        Path file;
-        try
-        {
-            file = getFilePath();
+        if (executor == null) return false;
+        if (executor instanceof java.util.concurrent.ThreadPoolExecutor) {
+            java.util.concurrent.ThreadPoolExecutor tpe =
+                    (java.util.concurrent.ThreadPoolExecutor) executor;
+            return !tpe.isShutdown() && !tpe.isTerminated();
         }
-        catch (IOException ioe)
-        {
-            log.error("Could not resolve rolled-items path during shutdown flush", ioe);
-            return;
-        }
+        return true;
+    }
 
-        try
+    private void safeNotifyChange()
+    {
+        Runnable cb = onChange;
+        if (cb != null) { try { cb.run(); } catch (Throwable t) { log.error("onChange threw", t); } }
+    }
+
+    private Path getFilePath() throws IOException
+    {
+        String name = accountManager.getPlayerName();
+        if (name == null) throw new IOException("Player name is null");
+        Path dir = RUNELITE_DIR.toPath().resolve("chanceman").resolve(name);
+        Files.createDirectories(dir);
+        return dir.resolve(FILE_NAME);
+    }
+
+    private Path safeGetFilePathOrNull()
+    {
+        try { return getFilePath(); } catch (IOException ioe) { return null; }
+    }
+
+    /** Windows-safe: COPY current file to a timestamped backup with small retries; then prune. */
+    private void rotateBackupIfExists(Path file) throws IOException
+    {
+        if (!Files.exists(file)) return;
+
+        Path backups = file.getParent().resolve("backups");
+        Files.createDirectories(backups);
+
+        String ts = new SimpleDateFormat(BACKUP_TS_PATTERN).format(new Date());
+        Path bak = backups.resolve(file.getFileName() + "." + ts + ".bak");
+
+        final int maxAttempts = 5;
+        for (int attempt = 1; ; attempt++)
         {
-            // 1) backup current .json
-            if (Files.exists(file))
+            try
             {
-                Path backups = file.getParent().resolve("backups");
-                Files.createDirectories(backups);
-                String ts = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-                Path bak = backups.resolve(file.getFileName() + "." + ts + ".bak");
-                safeMove(file, bak,
-                        StandardCopyOption.ATOMIC_MOVE,
-                        StandardCopyOption.REPLACE_EXISTING);
-                // prune old backups…
-                Files.list(backups)
-                        .filter(p -> p.getFileName().toString().startsWith(file.getFileName() + "."))
-                        .sorted(Comparator.comparing(Path::getFileName).reversed())
-                        .skip(MAX_BACKUPS)
-                        .forEach(p -> p.toFile().delete());
+                Files.copy(file, bak, StandardCopyOption.REPLACE_EXISTING);
+                break;
             }
-
-            // 2) write new JSON to .tmp
-            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-            try (BufferedWriter w = Files.newBufferedWriter(tmp))
+            catch (FileSystemException fse)
             {
-                gson.toJson(rolledItems, w);
+                if (attempt >= maxAttempts)
+                {
+                    log.error("Backup copy failed after {} attempts for {}", attempt, file, fse);
+                    break; // give up on backup, continue save
+                }
+                try { Thread.sleep(50L * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
             }
-
-            // 3) atomically replace .json
-            safeMove(tmp, file, StandardCopyOption.ATOMIC_MOVE);
-
-            // 4) mirror immediately with current time (no debounce)
-            String player = accountManager.getPlayerName();
-            if (player != null && !player.isEmpty())
-            {
-                Set<Integer> snapshot = new LinkedHashSet<>(rolledItems);
-                configPersistence.writeStampedSet(player, CFG_KEY, snapshot, System.currentTimeMillis());
-            }
-
-            dirty = false;
         }
-        catch (IOException e)
+
+        try (java.util.stream.Stream<Path> stream = Files.list(backups))
         {
-            log.error("Shutdown flush failed for rolled items (local saves may be stale).", e);
-        }
-        catch (Exception e)
-        {
-            log.warn("Shutdown flush: failed to mirror rolled set to ConfigManager.", e);
+            stream
+                    .filter(p -> p.getFileName().toString().startsWith(file.getFileName() + "."))
+                    .sorted(Comparator.comparing(Path::getFileName).reversed())
+                    .skip(MAX_BACKUPS)
+                    .forEach(p -> { try { Files.deleteIfExists(p); } catch (IOException ignored) {} });
         }
     }
 
-    /**
-     * Retrieves an unmodifiable set of rolled item IDs.
-     *
-     * @return An unmodifiable set of rolled item IDs.
-     */
-    public Set<Integer> getRolledItems()
+    /** Write JSON to .tmp and atomically replace the main file; mark self-write for watcher echo suppression. */
+    private void writeJsonAtomic(Path file, Set<Integer> data) throws IOException
     {
-        return Collections.unmodifiableSet(rolledItems);
+        Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+        try (BufferedWriter w = Files.newBufferedWriter(tmp)) { gson.toJson(data, w); }
+        safeMove(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+        lastSelfWriteMs = System.currentTimeMillis();
+    }
+
+    private long safeLastModified(Path file)
+    {
+        try { return Files.getLastModifiedTime(file).toMillis(); } catch (IOException e) { return 0L; }
+    }
+
+    private Set<Integer> readLocalJson(Path file)
+    {
+        Set<Integer> local = new LinkedHashSet<>();
+        if (!Files.exists(file)) return local;
+        try (Reader r = Files.newBufferedReader(file))
+        {
+            Set<Integer> loaded = gson.fromJson(r, SET_TYPE);
+            if (loaded != null) local.addAll(loaded);
+        }
+        catch (IOException e)
+        {
+            log.error("Error reading rolled items JSON", e);
+        }
+        return local;
+    }
+
+    private ConfigPersistence.StampedSet readCloud(String player)
+    {
+        try { return configPersistence.readStampedSet(player, CFG_KEY); }
+        catch (Exception e) { return new ConfigPersistence.StampedSet(new LinkedHashSet<>(), 0L); }
+    }
+
+    private void closeWatchServiceQuietly()
+    {
+        try { if (watchService != null) watchService.close(); } catch (IOException ignored) {}
+        watchService = null;
+    }
+
+    private void runWatcherLoop(String target)
+    {
+        long lastHandled = 0L;
+        try
+        {
+            while (watcherRunning)
+            {
+                WatchKey key;
+                try { key = watchService.take(); }
+                catch (InterruptedException | ClosedWatchServiceException ie) { break; }
+
+                boolean relevant = key.pollEvents().stream().anyMatch(ev -> {
+                    Object ctx = ev.context();
+                    return (ctx instanceof Path) && ((Path) ctx).getFileName().toString().equals(target);
+                });
+                key.reset();
+                if (!relevant) continue;
+
+                long now = System.currentTimeMillis();
+                if (now - lastSelfWriteMs <= SELF_WRITE_GRACE_MS) continue;
+                if (now - lastHandled < FS_DEBOUNCE_MS) continue;
+                lastHandled = now;
+
+                try
+                {
+                    reconcileWithCloud(true);
+                    safeNotifyChange();
+                }
+                catch (Throwable t)
+                {
+                    log.error("Rolled watcher reconcile failed", t);
+                }
+            }
+        }
+        finally
+        {
+            closeWatchServiceQuietly();
+            watcherRunning = false;
+        }
+    }
+
+    /** Move with fallback when ATOMIC_MOVE not supported. */
+    private void safeMove(Path source, Path target, CopyOption... opts) throws IOException
+    {
+        try { Files.move(source, target, opts); }
+        catch (AtomicMoveNotSupportedException | AccessDeniedException ex)
+        {
+            Set<CopyOption> fallback = new HashSet<>(Arrays.asList(opts));
+            fallback.remove(StandardCopyOption.ATOMIC_MOVE);
+            fallback.add(StandardCopyOption.REPLACE_EXISTING);
+            Files.move(source, target, fallback.toArray(new CopyOption[0]));
+        }
     }
 }

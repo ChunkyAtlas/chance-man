@@ -20,6 +20,8 @@ import java.util.Set;
 public final class ConfigPersistence
 {
     private static final String GROUP = "chanceman";
+    private static final String DATA_SUFFIX = ".data";
+    private static final String TS_SUFFIX = ".ts";
     private static final Type SET_TYPE = new TypeToken<Set<Integer>>(){}.getType();
 
     private final ConfigManager configManager;
@@ -31,17 +33,8 @@ public final class ConfigPersistence
         this.configManager = configManager;
         this.gson = gson;
     }
-
-    private static String dataKey(String key, String player)
-    {
-        return key + "." + player + ".data";
-    }
-
-    private static String tsKey(String key, String player)
-    {
-        return key + "." + player + ".ts";
-    }
-
+    private static String dataKey(String key, String player) { return key + "." + player + DATA_SUFFIX; }
+    private static String tsKey(String key, String player)   { return key + "." + player + TS_SUFFIX; }
     /** Value class for stamped set reads. */
     public static final class StampedSet
     {
@@ -50,8 +43,8 @@ public final class ConfigPersistence
 
         public StampedSet(Set<Integer> data, long ts)
         {
-            this.data = (data != null) ? data : new LinkedHashSet<>();
-            this.ts = ts;
+            this.data = (data != null) ? new LinkedHashSet<>(data) : new LinkedHashSet<>();
+            this.ts = Math.max(0L, ts);
         }
     }
 
@@ -61,46 +54,74 @@ public final class ConfigPersistence
      */
     public StampedSet readStampedSet(String player, String key)
     {
-        if (player == null || player.isEmpty())
+        if (isBlank(player) || isBlank(key))
         {
             return new StampedSet(new LinkedHashSet<>(), 0L);
         }
 
         String rawData = configManager.getConfiguration(GROUP, dataKey(key, player));
-        String rawTs = configManager.getConfiguration(GROUP, tsKey(key, player));
-        if (rawData == null || rawData.isEmpty() || rawTs == null || rawTs.isEmpty())
+        String rawTs   = configManager.getConfiguration(GROUP, tsKey(key, player));
+
+        if (isBlank(rawData) || isBlank(rawTs))
         {
             return new StampedSet(new LinkedHashSet<>(), 0L);
         }
 
         try
         {
-            Set<Integer> data = gson.fromJson(rawData, SET_TYPE);
-            long ts = Long.parseLong(rawTs);
-            return new StampedSet((data != null) ? new LinkedHashSet<>(data) : new LinkedHashSet<>(), ts);
+            Set<Integer> parsed = gson.fromJson(rawData, SET_TYPE);
+            long ts = parseLongSafe(rawTs);
+            return new StampedSet((parsed != null) ? parsed : new LinkedHashSet<>(), ts);
         }
-        catch (Exception e)
+        catch (Exception ignored)
         {
             return new StampedSet(new LinkedHashSet<>(), 0L);
         }
     }
 
     /**
-     * Write a stamped set to ConfigManager.
+     * Write a stamped set to ConfigManager (unconditional).
      *
      * @param timestampMillis epoch millis representing the authoritative write time
      */
     public void writeStampedSet(String player, String key, Set<Integer> data, long timestampMillis)
     {
-        if (player == null || player.isEmpty())
-        {
-            return;
-        }
+        if (isBlank(player) || isBlank(key)) return;
 
         String dataJson = gson.toJson((data != null) ? data : new LinkedHashSet<>());
-        String tsStr = String.valueOf(Math.max(0L, timestampMillis));
+        String tsStr    = String.valueOf(Math.max(0L, timestampMillis));
 
+        // Two separate keys: value and timestamp
         configManager.setConfiguration(GROUP, dataKey(key, player), dataJson);
         configManager.setConfiguration(GROUP, tsKey(key, player), tsStr);
+    }
+
+    /**
+     * Write only if the provided timestamp is >= the currently stored timestamp.
+     * This is a simple guard against out-of-order writes when multiple machines
+     * or threads may be updating the cloud state.
+     *
+     * @return true if a write occurred, false if skipped
+     */
+    public boolean writeStampedSetIfNewer(String player, String key, Set<Integer> data, long timestampMillis)
+    {
+        if (isBlank(player) || isBlank(key)) return false;
+
+        long existingTs = parseLongSafe(configManager.getConfiguration(GROUP, tsKey(key, player)));
+        if (timestampMillis < existingTs)
+        {
+            // Skip stale write
+            return false;
+        }
+        writeStampedSet(player, key, data, timestampMillis);
+        return true;
+    }
+
+    private static boolean isBlank(String s) { return s == null || s.isEmpty(); }
+
+    private static long parseLongSafe(String s)
+    {
+        if (isBlank(s)) return 0L;
+        try { return Long.parseLong(s.trim()); } catch (NumberFormatException e) { return 0L; }
     }
 }

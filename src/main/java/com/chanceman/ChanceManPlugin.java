@@ -115,12 +115,26 @@ public class ChanceManPlugin extends Plugin
         eventBus.register(accountManager);
         overlayManager.add(chanceManOverlay);
         overlayManager.add(dropsTooltipOverlay);
-        fileExecutor = Executors.newSingleThreadExecutor();
+
+        fileExecutor = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "ChanceMan-FileIO");
+            t.setDaemon(true);
+            return t;
+        });
         unlockedItemsManager.setExecutor(fileExecutor);
         rolledItemsManager.setExecutor(fileExecutor);
 
         if (accountManager.ready())
         {
+            Runnable refreshPanel = () -> {
+                if (chanceManPanel != null) {
+                    SwingUtilities.invokeLater(chanceManPanel::updatePanel);
+                }
+                refreshDropsViewerIfOpen();
+            };
+            unlockedItemsManager.setOnChange(refreshPanel);
+            rolledItemsManager.setOnChange(refreshPanel);
+
             unlockedItemsManager.loadUnlockedItems();
             rolledItemsManager.loadRolledItems();
         }
@@ -140,6 +154,14 @@ public class ChanceManPlugin extends Plugin
                 rollAnimationManager
         );
         rollAnimationManager.setChanceManPanel(chanceManPanel);
+
+        SwingUtilities.invokeLater(chanceManPanel::updatePanel);
+
+        if (accountManager.ready())
+        {
+            unlockedItemsManager.startWatching();
+            rolledItemsManager.startWatching();
+        }
 
         BufferedImage icon = ImageUtil.loadImageResource(
                 getClass(), "/net/runelite/client/plugins/chanceman/icon.png"
@@ -163,6 +185,8 @@ public class ChanceManPlugin extends Plugin
 
         try
         {
+            if (unlockedItemsManager != null) unlockedItemsManager.stopWatching();
+            if (rolledItemsManager != null)   rolledItemsManager.stopWatching();
             if (unlockedItemsManager != null) unlockedItemsManager.flushIfDirtyOnExit();
             if (rolledItemsManager != null) rolledItemsManager.flushIfDirtyOnExit();
         }
@@ -275,12 +299,24 @@ public class ChanceManPlugin extends Plugin
     {
         if (!featuresActive) return;
         dropCache.pruneOldCaches();
+
+        // Stop watchers around the reload
+        unlockedItemsManager.stopWatching();
+        rolledItemsManager.stopWatching();
+
+        // Reload data
         unlockedItemsManager.loadUnlockedItems();
         rolledItemsManager.loadRolledItems();
+
+        // Ensure UI reflects new account state
         if (chanceManPanel != null)
         {
             SwingUtilities.invokeLater(() -> chanceManPanel.updatePanel());
         }
+
+        // Restart watchers
+        unlockedItemsManager.startWatching();
+        rolledItemsManager.startWatching();
     }
 
     @Subscribe
