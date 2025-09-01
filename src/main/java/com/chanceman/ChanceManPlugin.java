@@ -190,10 +190,7 @@ public class ChanceManPlugin extends Plugin
             if (unlockedItemsManager != null) unlockedItemsManager.flushIfDirtyOnExit();
             if (rolledItemsManager != null) rolledItemsManager.flushIfDirtyOnExit();
         }
-        catch (Exception e)
-        {
-            // Non-fatal: continue shutdown
-        }
+        catch (Exception ignored) { /* Non-fatal */ }
 
         clientThread.invokeLater(musicWidgetController::restore);
         musicSearchButton.onStop();
@@ -219,8 +216,31 @@ public class ChanceManPlugin extends Plugin
         }
         if (fileExecutor != null)
         {
-            fileExecutor.shutdownNow();
+            fileExecutor.shutdown(); // stop accepting new tasks
+            try
+            {
+                if (!fileExecutor.awaitTermination(1500, java.util.concurrent.TimeUnit.MILLISECONDS))
+                {
+                    fileExecutor.shutdownNow(); // cancel leftovers if they hang
+                }
+            }
+            catch (InterruptedException ie)
+            {
+                fileExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
             fileExecutor = null;
+
+            if (unlockedItemsManager != null)
+            {
+                unlockedItemsManager.setExecutor(null);
+                unlockedItemsManager.setOnChange(null);
+            }
+            if (rolledItemsManager != null)
+            {
+                rolledItemsManager.setExecutor(null);
+                rolledItemsManager.setOnChange(null);
+            }
         }
         dropFetcher.shutdown();
         dropCache.shutdown();

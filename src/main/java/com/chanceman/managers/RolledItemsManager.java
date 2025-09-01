@@ -32,9 +32,7 @@ public class RolledItemsManager
     private static final long FS_DEBOUNCE_MS = 200L;
     private static final String FILE_NAME = "chanceman_rolled.json";
     private static final Type SET_TYPE = new TypeToken<Set<Integer>>(){}.getType();
-
     private final Set<Integer> rolledItems = Collections.synchronizedSet(new LinkedHashSet<>());
-
     @Inject private AccountManager accountManager;
     @Inject private Gson gson;
     @Inject private ConfigPersistence configPersistence;
@@ -49,7 +47,13 @@ public class RolledItemsManager
     private Thread watcherThread;
 
     public boolean isRolled(int itemId) { return rolledItems.contains(itemId); }
-    public Set<Integer> getRolledItems() { return Collections.unmodifiableSet(rolledItems); }
+
+    /** Return an immutable snapshot to avoid leaking the synchronizedSet. */
+    public Set<Integer> getRolledItems() {
+        synchronized (rolledItems) {
+            return Collections.unmodifiableSet(new LinkedHashSet<>(rolledItems));
+        }
+    }
 
     public void markRolled(int itemId)
     {
@@ -125,8 +129,9 @@ public class RolledItemsManager
         try
         {
             rotateBackupIfExists(file);
-            writeJsonAtomic(file, rolledItems);
-            mirrorToCloud(System.currentTimeMillis(), false);
+            Set<Integer> snap = snapshotRolled();
+            writeJsonAtomic(file, snap);
+            mirrorToCloud(System.currentTimeMillis(), false, snap);
             dirty = false;
         }
         catch (IOException e)
@@ -165,8 +170,10 @@ public class RolledItemsManager
         else if (cloudTs > localMtime) { winner = cloud;  winnerStamp = cloudTs;    needPersist = true; } // pull to disk
         else { winner = local;  needPersist = !fileExisted; } // create disk if missing
 
-        rolledItems.clear();
-        rolledItems.addAll(winner);
+        synchronized (rolledItems) {
+            rolledItems.clear();
+            rolledItems.addAll(winner);
+        }
 
         if (needPersist)
         {
@@ -195,8 +202,9 @@ public class RolledItemsManager
             try
             {
                 rotateBackupIfExists(file);
-                writeJsonAtomic(file, rolledItems);
-                mirrorToCloud(stampMillis, debounced);
+                Set<Integer> snap = snapshotRolled();
+                writeJsonAtomic(file, snap);
+                mirrorToCloud(stampMillis, debounced, snap);
                 dirty = false;
             }
             catch (IOException e)
@@ -206,7 +214,8 @@ public class RolledItemsManager
         });
     }
 
-    private void mirrorToCloud(long stampMillis, boolean debounced)
+    /** Mirror to cloud, optionally debounced; uses provided snapshot to avoid re-locking. */
+    private void mirrorToCloud(long stampMillis, boolean debounced, Set<Integer> snapshot)
     {
         long now = System.currentTimeMillis();
         if (debounced && (now - lastConfigWriteMs < CONFIG_DEBOUNCE_MS)) return;
@@ -215,12 +224,12 @@ public class RolledItemsManager
         String player = accountManager.getPlayerName();
         if (player == null || player.isEmpty() || executor == null) return;
 
-        Set<Integer> snapshot = new LinkedHashSet<>(rolledItems);
+        Set<Integer> snap = (snapshot != null) ? snapshot : snapshotRolled();
         executor.submit(() -> {
             try
             {
                 // Guard against out-of-order writes across machines/threads
-                configPersistence.writeStampedSetIfNewer(player, CFG_KEY, snapshot, stampMillis);
+                configPersistence.writeStampedSetIfNewer(player, CFG_KEY, snap, stampMillis);
             }
             catch (Exception e)
             {
@@ -357,11 +366,16 @@ public class RolledItemsManager
                 try { key = watchService.take(); }
                 catch (InterruptedException | ClosedWatchServiceException ie) { break; }
 
-                boolean relevant = key.pollEvents().stream().anyMatch(ev -> {
+                boolean relevant = false;
+                for (WatchEvent<?> ev : key.pollEvents())
+                {
                     Object ctx = ev.context();
-                    return (ctx instanceof Path) && ((Path) ctx).getFileName().toString().equals(target);
-                });
-                key.reset();
+                    if (ctx instanceof Path && ((Path) ctx).getFileName().toString().equals(target))
+                    {
+                        relevant = true;
+                    }
+                }
+                if (!key.reset()) break; // exit if key becomes invalid
                 if (!relevant) continue;
 
                 long now = System.currentTimeMillis();
@@ -397,6 +411,13 @@ public class RolledItemsManager
             fallback.remove(StandardCopyOption.ATOMIC_MOVE);
             fallback.add(StandardCopyOption.REPLACE_EXISTING);
             Files.move(source, target, fallback.toArray(new CopyOption[0]));
+        }
+    }
+
+    /** Take a consistent snapshot under the set's monitor. */
+    private Set<Integer> snapshotRolled() {
+        synchronized (rolledItems) {
+            return new LinkedHashSet<>(rolledItems);
         }
     }
 }

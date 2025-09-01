@@ -48,7 +48,13 @@ public class UnlockedItemsManager
 
     public boolean ready() { return accountManager.getPlayerName() != null; }
     public boolean isUnlocked(int itemId) { return unlockedItems.contains(itemId); }
-    public Set<Integer> getUnlockedItems() { return Collections.unmodifiableSet(unlockedItems); }
+
+    /** Return an immutable snapshot to avoid leaking the synchronizedSet. */
+    public Set<Integer> getUnlockedItems() {
+        synchronized (unlockedItems) {
+            return Collections.unmodifiableSet(new LinkedHashSet<>(unlockedItems));
+        }
+    }
 
     public void unlockItem(int itemId)
     {
@@ -122,8 +128,9 @@ public class UnlockedItemsManager
         try
         {
             rotateBackupIfExists(file);
-            writeJsonAtomic(file, unlockedItems);
-            mirrorToCloud(System.currentTimeMillis(), false);
+            Set<Integer> snap = snapshotUnlocked();
+            writeJsonAtomic(file, snap);
+            mirrorToCloud(System.currentTimeMillis(), false, snap);
             dirty = false;
         }
         catch (IOException e)
@@ -161,8 +168,10 @@ public class UnlockedItemsManager
         else if (cloudTs > localMtime) { winner = cloud;  winnerStamp = cloudTs;    needPersist = true; } // pull to disk
         else { winner = local;  needPersist = !fileExisted; } // create disk if missing
 
-        unlockedItems.clear();
-        unlockedItems.addAll(winner);
+        synchronized (unlockedItems) {
+            unlockedItems.clear();
+            unlockedItems.addAll(winner);
+        }
 
         if (needPersist)
         {
@@ -191,8 +200,9 @@ public class UnlockedItemsManager
             try
             {
                 rotateBackupIfExists(file);
-                writeJsonAtomic(file, unlockedItems);
-                mirrorToCloud(stampMillis, debounced);
+                Set<Integer> snap = snapshotUnlocked();
+                writeJsonAtomic(file, snap);
+                mirrorToCloud(stampMillis, debounced, snap);
                 dirty = false;
             }
             catch (IOException e)
@@ -202,7 +212,8 @@ public class UnlockedItemsManager
         });
     }
 
-    private void mirrorToCloud(long stampMillis, boolean debounced)
+    /** Mirror to cloud, optionally debounced; uses provided snapshot to avoid re-locking. */
+    private void mirrorToCloud(long stampMillis, boolean debounced, Set<Integer> snapshot)
     {
         long now = System.currentTimeMillis();
         if (debounced && (now - lastConfigWriteMs < CONFIG_DEBOUNCE_MS)) return;
@@ -211,12 +222,12 @@ public class UnlockedItemsManager
         String player = accountManager.getPlayerName();
         if (player == null || player.isEmpty() || executor == null) return;
 
-        Set<Integer> snapshot = new LinkedHashSet<>(unlockedItems);
+        final Set<Integer> snap = (snapshot != null) ? snapshot : snapshotUnlocked();
         executor.submit(() -> {
             try
             {
                 // Guard against out-of-order writes across machines/threads
-                configPersistence.writeStampedSetIfNewer(player, CFG_KEY, snapshot, stampMillis);
+                configPersistence.writeStampedSetIfNewer(player, CFG_KEY, snap, stampMillis);
             }
             catch (Exception e)
             {
@@ -304,10 +315,7 @@ public class UnlockedItemsManager
     private void writeJsonAtomic(Path file, Set<Integer> data) throws IOException
     {
         Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-        try (BufferedWriter w = Files.newBufferedWriter(tmp))
-        {
-            gson.toJson(data, w);
-        }
+        try (BufferedWriter w = Files.newBufferedWriter(tmp)) { gson.toJson(data, w); }
         safeMove(tmp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
         lastSelfWriteMs = System.currentTimeMillis(); // mark AFTER swap
     }
@@ -356,11 +364,16 @@ public class UnlockedItemsManager
                 try { key = watchService.take(); }
                 catch (InterruptedException | ClosedWatchServiceException ie) { break; }
 
-                boolean relevant = key.pollEvents().stream().anyMatch(ev -> {
+                boolean relevant = false;
+                for (WatchEvent<?> ev : key.pollEvents())
+                {
                     Object ctx = ev.context();
-                    return (ctx instanceof Path) && ((Path) ctx).getFileName().toString().equals(target);
-                });
-                key.reset();
+                    if (ctx instanceof Path && ((Path) ctx).getFileName().toString().equals(target))
+                    {
+                        relevant = true;
+                    }
+                }
+                if (!key.reset()) break; // exit if key becomes invalid
                 if (!relevant) continue;
 
                 long now = System.currentTimeMillis();
@@ -399,6 +412,13 @@ public class UnlockedItemsManager
             fallback.remove(StandardCopyOption.ATOMIC_MOVE);
             fallback.add(StandardCopyOption.REPLACE_EXISTING);
             Files.move(source, target, fallback.toArray(new CopyOption[0]));
+        }
+    }
+
+    /** Take a consistent snapshot under the set's monitor. */
+    private Set<Integer> snapshotUnlocked() {
+        synchronized (unlockedItems) {
+            return new LinkedHashSet<>(unlockedItems);
         }
     }
 }
