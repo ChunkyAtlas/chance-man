@@ -19,7 +19,7 @@ import javax.inject.Singleton;
 @Singleton
 public class SpriteOverrideManager implements SpriteOverride
 {
-    private static final int SPRITE_ID = SpriteID.TAB_MUSIC;
+    private static final int SPRITE_ID = 910;
     private static final String RESOURCE_PATH = "/com/chanceman/drops.png";
 
     private final SpriteManager spriteManager;

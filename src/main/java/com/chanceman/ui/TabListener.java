@@ -33,9 +33,9 @@ public class TabListener
     @Subscribe
     public void onVarClientIntChanged(VarClientIntChanged ev)
     {
-        if (ev.getIndex() != VarClientInt.INVENTORY_TAB) return;
+        if (ev.getIndex() != 171) return;
 
-        int newTab = client.getVarcIntValue(VarClientInt.INVENTORY_TAB);
+        int newTab = client.getVarcIntValue(171);
         if (widgetController.isOverrideActive() && newTab != 13)
         {
             clientThread.invokeLater(widgetController::restore);

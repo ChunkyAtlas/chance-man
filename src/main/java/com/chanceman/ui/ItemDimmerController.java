@@ -17,10 +17,9 @@ import javax.inject.Singleton;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Dims the actual item icon widgets (no overlay).
+ * Dims the actual item icon widgets.
  * - Only dims when item is TRADEABLE && LOCKED.
  * - Runs at BeforeRender so scripts in the same frame can't overwrite opacity.
- * - No deprecated getWidget / WidgetInfo usage.
  */
 @Singleton
 @RequiredArgsConstructor(onConstructor_ = @Inject)
@@ -36,9 +35,6 @@ public class ItemDimmerController
 
     private final ConcurrentHashMap<Integer, Boolean> tradeableCache = new ConcurrentHashMap<>();
 
-    // Set by script events; consumed on BeforeRender (once per frame).
-    private volatile boolean uiDirty = false;
-
     public void setDimOpacity(int opacity) { this.dimOpacity = Math.max(0, Math.min(255, opacity)); }
 
     @Subscribe
@@ -53,7 +49,6 @@ public class ItemDimmerController
             case ScriptID.BANKMAIN_FINISHBUILDING:
             case ScriptID.BANKMAIN_SEARCH_REFRESH:
             case ScriptID.BANK_DEPOSITBOX_INIT:
-                uiDirty = true;
                 break;
             default:
                 // ignore others
@@ -66,17 +61,22 @@ public class ItemDimmerController
     @Subscribe
     public void onBeforeRender(BeforeRender e)
     {
-        if (!enabled || !uiDirty || client.getGameState() != GameState.LOGGED_IN) return;
-        if (client.isDraggingWidget() || client.isMenuOpen()) return;
+        if (!enabled || client.getGameState() != GameState.LOGGED_IN) return;
 
-        uiDirty = false;
+        dimAllRoots();
+    }
 
+    private void dimAllRoots()
+    {
         final Widget[] roots = client.getWidgetRoots();
         if (roots == null) return;
 
         for (Widget root : roots)
         {
-            if (root != null) walkAndDim(root);
+            if (root != null)
+            {
+                walkAndDim(root);
+            }
         }
     }
 
