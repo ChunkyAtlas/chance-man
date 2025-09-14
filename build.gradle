@@ -41,7 +41,7 @@ tasks.register('shadowJar', Jar) {
 	manifest {
 		attributes('Main-Class': 'com.chanceman.ChanceManPluginTest', 'Multi-Release': true)
 	}
-o
+
 	duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 	from sourceSets.main.output
 	from sourceSets.test.output
