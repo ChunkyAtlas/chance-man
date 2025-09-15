@@ -101,10 +101,18 @@ public interface ChanceManConfig extends Config
     default boolean showGemDropTable() { return true; }
 
     @ConfigItem(
+            keyName = "deprioritizeLockedOptions",
+            name = "Deprioritize Locked Menu Options",
+            description = "Sorts locked menu options below the Walk Here option.",
+            position = 11
+    )
+    default boolean deprioritizeLockedOptions() { return true; }
+
+    @ConfigItem(
             keyName = "unlockedItemColor",
             name = "Unlocked Item Color",
             description = "Color of the unlocked item name in chat messages.",
-            position = 11
+            position = 12
     )
     default Color unlockedItemColor()
     {
@@ -115,7 +123,7 @@ public interface ChanceManConfig extends Config
             keyName = "rolledItemColor",
             name = "Rolled Item Color",
             description = "Color of the item used to unlock another item.",
-            position = 12
+            position = 13
     )
     default Color rolledItemColor()
     {
@@ -126,7 +134,7 @@ public interface ChanceManConfig extends Config
             keyName = "dimLockedItemsEnabled",
             name = "Dim locked items",
             description = "Dim any item icons that have not been unlocked.",
-            position = 13
+            position = 14
     )
     default boolean dimLockedItemsEnabled()
     {
@@ -138,7 +146,7 @@ public interface ChanceManConfig extends Config
             keyName = "dimLockedItemsOpacity",
             name = "Dim opacity",
             description = "0 = no dim (fully visible), 255 = fully transparent.",
-            position = 14
+            position = 15
     )
     default int dimLockedItemsOpacity()
     {

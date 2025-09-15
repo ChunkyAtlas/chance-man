@@ -1,5 +1,6 @@
 package com.chanceman.menus;
 
+import com.chanceman.ChanceManConfig;
 import com.chanceman.ChanceManPlugin;
 import com.chanceman.managers.UnlockedItemsManager;
 import lombok.Getter;
@@ -65,6 +66,8 @@ public class ActionHandler {
 	private Client client;
 	@Inject
 	private EventBus eventBus;
+    @Inject
+    private ChanceManConfig config;
 	@Inject
 	private ChanceManPlugin plugin;
 	@Inject
@@ -130,6 +133,9 @@ public class ActionHandler {
 			entry.setOption("<col=808080>" + option);
 			entry.setTarget("<col=808080>" + target);
 			entry.onClick(DISABLED);
+            if (config.deprioritizeLockedOptions()) {
+                entry.setDeprioritized(true);
+            }
 		}
 	}
 
