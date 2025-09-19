@@ -41,10 +41,7 @@ public class DropCache
     private volatile boolean indexLoaded = false;
 
     // Dedicated IO executor so we dont block the common ForkJoinPool with file ops
-    private final ExecutorService ioExecutor = Executors.newFixedThreadPool(
-            Math.max(2, Runtime.getRuntime().availableProcessors() / 2),
-            new ThreadFactoryBuilder().setNameFormat("dropcache-io-%d").build()
-    );
+    private ExecutorService ioExecutor;
 
     @Inject
     public DropCache(Gson gson, AccountManager accountManager, DropFetcher dropFetcher)
@@ -57,6 +54,7 @@ public class DropCache
     /** Preload on-disk index and prune stale cache entries. */
     public void startUp()
     {
+        ensureExecutor();
         String player = accountManager.getPlayerName();
         if (player == null || player.isEmpty()) { return; }
         loadIndex();
@@ -85,6 +83,7 @@ public class DropCache
             return CompletableFuture.failedFuture(ex);
         }
 
+        ExecutorService executor = ensureExecutor();
         return CompletableFuture.supplyAsync(() ->
         {
             if (file != null)
@@ -104,7 +103,7 @@ public class DropCache
                 removeIndex(file);
             }
             return null;
-        }, ioExecutor).thenComposeAsync(cached ->
+        }, executor).thenComposeAsync(cached ->
         {
             if (cached != null)
             {
@@ -166,13 +165,13 @@ public class DropCache
                             log.error("Failed to write cache file for {}", name, e);
                         }
                         return data;
-                    }, ioExecutor)
+                    }, executor)
                     .exceptionally(ex ->
                     {
                         log.error("Error fetching drop data for NPC {}", npcId, ex);
                         return null;
                     });
-        }, ioExecutor);
+        }, executor);
     }
 
     /**
@@ -191,6 +190,7 @@ public class DropCache
      */
     public CompletableFuture<List<String>> searchNpcNames(String query)
     {
+        ExecutorService executor = ensureExecutor();
         return CompletableFuture.supplyAsync(() ->
         {
             String lc = query.toLowerCase(Locale.ROOT).trim();
@@ -213,7 +213,7 @@ public class DropCache
             }
 
             return new ArrayList<>(names);
-        }, ioExecutor);
+        }, executor);
     }
 
     private boolean isFresh(Path file)
@@ -431,25 +431,39 @@ public class DropCache
     }
 
     /** Gracefully shutdown IO executor. */
-    public void shutdown()
-    {
-        ioExecutor.shutdown();
-        try
-        {
-            if (!ioExecutor.awaitTermination(3, TimeUnit.SECONDS))
-            {
-                ioExecutor.shutdownNow();
-                if (!ioExecutor.awaitTermination(2, TimeUnit.SECONDS))
-                {
+    public void shutdown() {
+        ExecutorService executor = ioExecutor;
+        if (executor == null) {
+            return;
+        }
+
+        executor.shutdown();
+        try {
+            if (!executor.awaitTermination(3, TimeUnit.SECONDS)) {
+                executor.shutdownNow();
+                if (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
                     log.warn("dropcache-io executor did not terminate cleanly");
                 }
             }
-        }
-        catch (InterruptedException ie)
-        {
-            ioExecutor.shutdownNow();
+        } catch (InterruptedException ie) {
+            executor.shutdownNow();
             Thread.currentThread().interrupt();
+        } finally {
+            ioExecutor = null;
+            cache.clear();
+            nameIndex.clear();
+            indexLoaded = false;
         }
+    }
+
+    private synchronized ExecutorService ensureExecutor() {
+        if (ioExecutor == null || ioExecutor.isShutdown() || ioExecutor.isTerminated()) {
+            ioExecutor = Executors.newFixedThreadPool(
+                    Math.max(2, Runtime.getRuntime().availableProcessors() / 2),
+                    new ThreadFactoryBuilder().setNameFormat("dropcache-io-%d").build()
+            );
+        }
+        return ioExecutor;
     }
 
     private String buildNameKey(String name, int level)
