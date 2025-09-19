@@ -16,6 +16,7 @@ public enum FreeToPlayBlockedItems {
     CastleWarsBracelet3(ItemID.JEWL_CASTLEWARS_BRACELET3),
     CursedAmuletOfMagic(ItemID.AMULET_OF_MAGIC_CURSED),
     Dust(ItemID.DUST),
+    Fur(ItemID.FUR),
 
     // Dyed boots and gloves
     GreyBoots(ItemID.WOLFENBOOTS_GREY),
