@@ -44,6 +44,11 @@ public class ItemDimmerController {
         this.dimOpacity = Math.max(0, Math.min(255, opacity));
     }
 
+    private boolean isCollectionLogWidget(Widget w)
+    {
+        return w != null && w.getId() >>> 16 == 621;
+    }
+
     /**
      * Last chance before drawing this frame; safe place to enforce opacity without races.
      */
@@ -69,6 +74,7 @@ public class ItemDimmerController {
     private void walkAndDim(Widget w) {
         if (w == null || w.isHidden()) return;
 
+        if (isCollectionLogWidget(w)) return;
         final int itemId = w.getItemId();
         if (itemId > 0) {
             // Don’t override the game’s own dim on bank placeholders

@@ -178,7 +178,7 @@ public class ActionHandler {
 		String target = Text.removeTags(entry.getTarget());
 
 		// Always allow "Drop"
-		if (option.equalsIgnoreCase("drop"))
+		if (option.equalsIgnoreCase("drop") || option.equalsIgnoreCase("check"))
 			return true;
 		if (option.equalsIgnoreCase("clean") || option.equalsIgnoreCase("rub"))
 		{
