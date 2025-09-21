@@ -6,36 +6,56 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Maps ensouled head item IDs (including untradeable drop IDs) to their tradeable IDs.
+ * Non-ensouled or unknown IDs are returned unchanged by {@link #toTradeableId(int)}.
+ */
 public final class EnsouledHeadMapping {
-    public static final int DEFAULT_ENSOULED_HEAD_ID = -1;
 
-    @Getter public static final Map<String, Integer> ENSOULED_HEAD_MAP;
+    @Getter
+    public static final Map<Integer, Integer> ENSOULED_CANONICAL_ID;
 
     static {
-        Map<String, Integer> ensouledMap = new HashMap<>();
-        ensouledMap.put("ensouled abyssal head", 13508);
-        ensouledMap.put("ensouled aviansie head", 13505);
-        ensouledMap.put("ensouled bear head", 13463);
-        ensouledMap.put("ensouled bloodveld head", 13496);
-        ensouledMap.put("ensouled chaos druid head", 13472);
-        ensouledMap.put("ensouled dagannoth head", 13493);
-        ensouledMap.put("ensouled demon head", 13502);
-        ensouledMap.put("ensouled dog head", 13469);
-        ensouledMap.put("ensouled dragon head", 13511);
-        ensouledMap.put("ensouled elf head", 13481);
-        ensouledMap.put("ensouled giant head", 13475);
-        ensouledMap.put("ensouled goblin head", 13448);
-        ensouledMap.put("ensouled hellhound head", 26997);
-        ensouledMap.put("ensouled horror head", 13487);
-        ensouledMap.put("ensouled imp head", 13454);
-        ensouledMap.put("ensouled kalphite head", 13490);
-        ensouledMap.put("ensouled minotaur head", 13457);
-        ensouledMap.put("ensouled monkey head", 13451);
-        ensouledMap.put("ensouled ogre head", 13478);
-        ensouledMap.put("ensouled scorpion head", 13460);
-        ensouledMap.put("ensouled troll head", 13484);
-        ensouledMap.put("ensouled tzhaar head", 13499);
-        ensouledMap.put("ensouled unicorn head", 13466);
-        ENSOULED_HEAD_MAP = Collections.unmodifiableMap(ensouledMap);
+        Map<Integer, Integer> idMap = new HashMap<>();
+
+        java.util.function.BiConsumer<Integer, Integer> pair = (untradeable, tradeable) -> {
+            idMap.put(untradeable, tradeable);
+            idMap.put(tradeable, tradeable);
+        };
+
+        pair.accept(13447, 13448); // Goblin
+        pair.accept(13450, 13451); // Monkey
+        pair.accept(13453, 13454); // Imp
+        pair.accept(13456, 13457); // Minotaur
+        pair.accept(13459, 13460); // Scorpion
+        pair.accept(13462, 13463); // Bear
+        pair.accept(13465, 13466); // Unicorn
+        pair.accept(13468, 13469); // Dog
+        pair.accept(13471, 13472); // Chaos Druid
+        pair.accept(13477, 13478); // Ogre
+        pair.accept(13480, 13481); // Elf
+        pair.accept(13483, 13484); // Troll
+        pair.accept(13486, 13487); // Horror
+        pair.accept(13489, 13490); // Kalphite
+        pair.accept(13492, 13493); // Dagannoth
+        pair.accept(13495, 13496); // Bloodveld
+        pair.accept(13498, 13499); // TzHaar
+        pair.accept(13501, 13502); // Demon
+        pair.accept(26996, 26997); // Hellhound
+        pair.accept(13504, 13505); // Aviansie
+        pair.accept(13507, 13508); // Abyssal
+        pair.accept(13510, 13511); // Dragon
+
+        ENSOULED_CANONICAL_ID = Collections.unmodifiableMap(idMap);
+    }
+
+    private EnsouledHeadMapping() { /* utility class, no instances */ }
+
+    /**
+     * Returns the tradeable ID for any ensouled head item ID.
+     * If the ID is already tradeable or not recognized as an ensouled head, it's returned unchanged.
+     */
+    public static int toTradeableId(int itemId) {
+        return ENSOULED_CANONICAL_ID.getOrDefault(itemId, itemId);
     }
 }

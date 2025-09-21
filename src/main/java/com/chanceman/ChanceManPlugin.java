@@ -391,13 +391,7 @@ public class ChanceManPlugin extends Plugin
         if (!accountManager.ready()) return;
 
         TileItem tileItem = (TileItem) event.getItem();
-        int itemId = tileItem.getId();
-        ItemComposition comp = itemManager.getItemComposition(itemId);
-        String name = (comp != null && comp.getName() != null) ? comp.getName() : tileItem.toString();
-        if (name.toLowerCase().contains("ensouled")) {
-            int mappedId = ItemsFilter.getEnsouledHeadId(name);
-            if (mappedId != EnsouledHeadMapping.DEFAULT_ENSOULED_HEAD_ID) { itemId = mappedId; }
-        }
+        int itemId = EnsouledHeadMapping.toTradeableId(tileItem.getId());
         int canonicalItemId = itemManager.canonicalize(itemId);
         if (!isTradeable(canonicalItemId) || isNotTracked(canonicalItemId))
         {
@@ -431,7 +425,8 @@ public class ChanceManPlugin extends Plugin
             for (net.runelite.api.Item item : event.getItemContainer().getItems())
             {
                 int rawItemId = item.getId();
-                int canonicalId = itemManager.canonicalize(rawItemId);
+                int mapped = EnsouledHeadMapping.toTradeableId(rawItemId);
+                int canonicalId = itemManager.canonicalize(mapped);
                 if (!isTradeable(canonicalId) || isNotTracked(canonicalId))
                 {
                     continue;

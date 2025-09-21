@@ -2,6 +2,7 @@ package com.chanceman.menus;
 
 import com.chanceman.ChanceManConfig;
 import com.chanceman.ChanceManPlugin;
+import com.chanceman.filters.EnsouledHeadMapping;
 import com.chanceman.managers.UnlockedItemsManager;
 import lombok.Getter;
 import lombok.Setter;
@@ -46,15 +47,17 @@ public class ActionHandler {
 	/**
 	 * Normalize a MenuEntryAdded into the base item ID.
 	 */
-	private int getItemId(MenuEntryAdded event, MenuEntry entry)
-	{
+	private int getItemId(MenuEntryAdded event, MenuEntry entry) {
 		MenuAction type = entry.getType();
 		boolean hasItemId = entry.getItemId() > 0 || event.getItemId() > 0;
-		if (!GROUND_ACTIONS.contains(type) && !hasItemId) {return -1;}
+		if (!GROUND_ACTIONS.contains(type) && !hasItemId) {
+			return -1;
+		}
 		int raw = GROUND_ACTIONS.contains(type)
 				? event.getIdentifier()
 				: Math.max(event.getItemId(), entry.getItemId());
-		return plugin.getItemManager().canonicalize(raw);
+		int mapped = EnsouledHeadMapping.toTradeableId(raw);
+		return plugin.getItemManager().canonicalize(mapped);
 	}
 
 	private final HashSet<Integer> enabledUIs = new HashSet<>() {{
@@ -211,12 +214,13 @@ public class ActionHandler {
 	 * If a ground item is locked, this method consumes the event.
 	 */
 	public static void handleGroundItems(ItemManager itemManager, UnlockedItemsManager unlockedItemsManager,
-										 MenuOptionClicked event, ChanceManPlugin plugin)
-	{
-		if (event.getMenuAction() != null && GROUND_ACTIONS.contains(event.getMenuAction()))
-		{
-			int rawItemId = event.getId() != -1 ? event.getId() : event.getMenuEntry().getItemId();
-			int canonicalGroundId = itemManager.canonicalize(rawItemId);
+										 MenuOptionClicked event, ChanceManPlugin plugin) {
+		if (event.getMenuAction() != null && GROUND_ACTIONS.contains(event.getMenuAction())) {
+			int rawItemId = event.getId() != -1
+					? event.getId()
+					: event.getMenuEntry().getItemId();
+			int mapped = EnsouledHeadMapping.toTradeableId(rawItemId);
+			int canonicalGroundId = itemManager.canonicalize(mapped);
 			if (plugin.isTradeable(canonicalGroundId)
 					&& !plugin.isNotTracked(canonicalGroundId)
 					&& unlockedItemsManager != null

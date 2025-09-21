@@ -33,40 +33,6 @@ public class ItemsFilter {
     }
 
     /**
-     * Returns the correct ensouled head ID for the given item name.
-     * If not found, returns DEFAULT_ENSOULED_HEAD_ID.
-     *
-     * @param itemName the item name to check.
-     * @return the ensouled head ID if found; otherwise DEFAULT_ENSOULED_HEAD_ID.
-     */
-    public static int getEnsouledHeadId(String itemName) {
-        return (itemName == null)
-                ? EnsouledHeadMapping.DEFAULT_ENSOULED_HEAD_ID
-                : EnsouledHeadMapping.getENSOULED_HEAD_MAP().getOrDefault(
-                itemName.toLowerCase(), EnsouledHeadMapping.DEFAULT_ENSOULED_HEAD_ID);
-    }
-
-    /**
-     * Scans the provided text and returns the ensouled head ID if any known ensouled head key is found.
-     * Returns DEFAULT_ENSOULED_HEAD_ID if no match is found.
-     *
-     * @param text the text to scan.
-     * @return the ensouled head ID if a key is found; otherwise DEFAULT_ENSOULED_HEAD_ID.
-     */
-    public static int getEnsouledHeadIdFromText(String text) {
-        if (text == null) {
-            return EnsouledHeadMapping.DEFAULT_ENSOULED_HEAD_ID;
-        }
-        String lowerText = text.toLowerCase();
-        for (String key : EnsouledHeadMapping.getENSOULED_HEAD_MAP().keySet()) {
-            if (lowerText.contains(key)) {
-                return EnsouledHeadMapping.getENSOULED_HEAD_MAP().get(key);
-            }
-        }
-        return EnsouledHeadMapping.DEFAULT_ENSOULED_HEAD_ID;
-    }
-
-    /**
      * Checks if a poisonable weapon variant is eligible for rolling.
      * Base weapons are always eligible; for poisoned variants, if requireWeaponPoison is true,
      * the corresponding global weapon poison must also be unlocked.
@@ -80,7 +46,7 @@ public class ItemsFilter {
         return PoisonWeapons.isPoisonVariantEligible(itemId, requireWeaponPoison, unlockedItems);
     }
 
-    private boolean isGlobalWeaponPoison(int itemId) {
+    private static boolean isGlobalWeaponPoison(int itemId) {
         return itemId == PoisonWeapons.WEAPON_POISON.getBaseId() ||
                 itemId == PoisonWeapons.WEAPON_POISON_.getBaseId() ||
                 itemId == PoisonWeapons.WEAPON_POISON__.getBaseId();

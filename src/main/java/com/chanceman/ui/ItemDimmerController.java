@@ -1,6 +1,7 @@
 package com.chanceman.ui;
 
 import com.chanceman.managers.UnlockedItemsManager;
+import com.chanceman.filters.EnsouledHeadMapping;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import net.runelite.api.Client;
@@ -95,21 +96,21 @@ public class ItemDimmerController {
     }
 
     private boolean shouldDimMemoized(int rawItemId) {
-        final Boolean cached = dimDecisionCache.get(rawItemId);
+        final int key = EnsouledHeadMapping.toTradeableId(rawItemId); // normalize cache key
+        final Boolean cached = dimDecisionCache.get(key);
         if (cached != null) return cached;
 
         final boolean result = shouldDim(rawItemId);
-        dimDecisionCache.put(rawItemId, result);
+        dimDecisionCache.put(key, result);
         return result;
     }
 
     private boolean shouldDim(int rawItemId) {
-        final int canonicalItemId = canonicalize(rawItemId);
+        final int mappedItemId = EnsouledHeadMapping.toTradeableId(rawItemId);
+        final int canonicalItemId = canonicalize(mappedItemId);
         if (canonicalItemId <= 0) return false;
-
         if (!isTradeableCanonical(canonicalItemId)) return false;
-
-        return !isUnlocked(rawItemId, canonicalItemId);
+        return !isUnlocked(mappedItemId, canonicalItemId);
     }
 
     private int canonicalize(int rawItemId) {
@@ -121,22 +122,22 @@ public class ItemDimmerController {
         }
     }
 
-    private boolean isUnlocked(int rawItemId, int canonicalItemId) {
+    private boolean isUnlocked(int normalizedItemId, int canonicalItemId) {
         if (unlockedItemsManager == null) return true; // fail open if manager missing
 
         try {
             // Fast paths: raw or canonical known unlocked
-            if (rawItemId > 0 && unlockedItemsManager.isUnlocked(rawItemId)) return true;
-            if (canonicalItemId > 0 && rawItemId != canonicalItemId && unlockedItemsManager.isUnlocked(canonicalItemId))
+            if (normalizedItemId > 0 && unlockedItemsManager.isUnlocked(normalizedItemId)) return true;
+            if (canonicalItemId > 0 && normalizedItemId != canonicalItemId && unlockedItemsManager.isUnlocked(canonicalItemId))
                 return true;
 
             // Slower path: related ids (placeholders / noted variants)
             final Set<Integer> candidates = new LinkedHashSet<>(4);
-            candidates.add(rawItemId);
+            candidates.add(normalizedItemId);
             candidates.add(canonicalItemId);
 
-            collectRelatedIds(rawItemId, candidates);
-            if (canonicalItemId != rawItemId) {
+            collectRelatedIds(normalizedItemId, candidates);
+            if (canonicalItemId != normalizedItemId) {
                 collectRelatedIds(canonicalItemId, candidates);
             }
 
