@@ -49,6 +49,11 @@ public class MusicWidgetController
     private List<Widget> backupJukeboxDynamicKids = null;
     private List<Widget> backupScrollStaticKids = null;
     private List<Widget> backupScrollDynamicKids = null;
+    private List<Widget> backupRootStaticKids = null;
+    private List<Widget> backupRootDynamicKids = null;
+    private final List<Widget> overrideRootWidgets = new ArrayList<>();
+    private final List<Widget> overrideScrollWidgets = new ArrayList<>();
+    private Integer originalRootType = null;
     private String originalTitleText = null;
     @Getter private final Map<Widget, DropItem> iconItemMap = new LinkedHashMap<>();
     @Getter private boolean overrideActive = false;
@@ -259,6 +264,7 @@ public class MusicWidgetController
         lvl.setOriginalWidth(title.getOriginalWidth());
         lvl.setOriginalHeight(title.getOriginalHeight());
         lvl.revalidate();
+        overrideRootWidgets.add(lvl);
 
         Widget oldBar = client.getWidget(MUSIC_GROUP, 9);
         if (oldBar == null)
@@ -283,6 +289,7 @@ public class MusicWidgetController
         bg.setFilled(true);
         bg.setTextColor(0x000000);
         bg.revalidate();
+        overrideRootWidgets.add(bg);
 
         final int border = 1;
         int innerWidth = newW - border * 2;
@@ -298,6 +305,7 @@ public class MusicWidgetController
         fill.setFilled(true);
         fill.setTextColor(0x00b33c);
         fill.revalidate();
+        overrideRootWidgets.add(fill);
 
         String txt = String.format("%d/%d", rolledCount, totalDrops);
         Widget label = root.createChild(-1);
@@ -312,6 +320,7 @@ public class MusicWidgetController
         label.setOriginalX(xOld + (newW / 2) - (txt.length() * 4));
         label.setOriginalY(newY + (BAR_HEIGHT / 2) - 6);
         label.revalidate();
+        overrideRootWidgets.add(label);
 
         int eyeX = xOld + newW + 4;
         int eyeY = newY + (BAR_HEIGHT / 2) - (EYE_SIZE / 2);
@@ -327,6 +336,7 @@ public class MusicWidgetController
         eye.revalidate();
         eye.setAction(0, "Toggle rolled items");
 
+        overrideRootWidgets.add(eye);
         eye.setOnOpListener((JavaScriptCallback) (ScriptEvent ev) ->
         {
             hideRolledItems = !hideRolledItems;
@@ -349,6 +359,7 @@ public class MusicWidgetController
         search.setSpriteId(SEARCH_SPRITE);
         search.revalidate();
         search.setAction(0, "Search Drops");
+        overrideRootWidgets.add(search);
 
         search.setOnOpListener((JavaScriptCallback) ev -> showSearchDialog());
         search.setHasListener(true);
@@ -464,6 +475,7 @@ public class MusicWidgetController
             icon.revalidate();
 
             iconItemMap.put(icon, d);
+            overrideScrollWidgets.add(icon);
         }
 
         updateIconsVisibilityAndLayout();
@@ -481,6 +493,18 @@ public class MusicWidgetController
                 w.setHidden(true);
             }
         }
+
+        Widget root = client.getWidget(MUSIC_GROUP, 0);
+        if (backupRootStaticKids == null && root != null)
+        {
+            backupRootStaticKids = copyChildren(root, false);
+        }
+        if (backupRootDynamicKids == null && root != null)
+        {
+            backupRootDynamicKids = copyChildren(root, true);
+        }
+        overrideRootWidgets.clear();
+        overrideScrollWidgets.clear();
 
         List<DropItem> drops = dropData.getDropTableSections().stream()
                 .filter(sec ->
@@ -515,12 +539,15 @@ public class MusicWidgetController
                 .filter(d -> rolledIds.contains(d.getItemId()))
                 .count();
 
-        Widget root = client.getWidget(MUSIC_GROUP, 0);
         Widget title = updateTitle(dropData);
 
         if (root != null)
         {
             root.setHidden(false);
+            if (originalRootType == null)
+            {
+                originalRootType = root.getType();
+            }
             root.setType(WidgetType.LAYER);
             WidgetUtils.hideAllChildrenSafely(root);
 
@@ -550,16 +577,17 @@ public class MusicWidgetController
         Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
         Widget jukebox = client.getWidget(MUSIC_GROUP, 6);
 
+        purgeWidgets(overrideRootWidgets);
+        purgeWidgets(overrideScrollWidgets);
+        overrideRootWidgets.clear();
+        overrideScrollWidgets.clear();
+
         if (root != null)
         {
-            Widget[] dynRoot = root.getDynamicChildren();
-            if (dynRoot != null)
+            restoreChildren(root, backupRootStaticKids, backupRootDynamicKids);
+            if (originalRootType != null)
             {
-                for (Widget w : dynRoot)
-                {
-                    w.setHidden(true);
-                    w.revalidate();
-                }
+                root.setType(originalRootType);
             }
         }
 
@@ -634,11 +662,41 @@ public class MusicWidgetController
         originalTitleText = null;
         currentDrops = null;
         overrideActive = false;
+        backupRootStaticKids = null;
+        backupRootDynamicKids = null;
+        originalRootType = null;
         backupJukeboxStaticKids = null;
         backupJukeboxDynamicKids = null;
         backupScrollStaticKids = null;
         backupScrollDynamicKids = null;
         iconItemMap.clear();
         musicSearchButton.onOverrideDeactivated();
+    }
+
+
+    /**
+     * Forcefully removes widgets we created during override so they cannot
+     * be resurrected by the music tab's onLoad() which tends to unhide children.
+     */
+    private static void purgeWidgets(List<Widget> widgets)
+    {
+        if (widgets == null)
+        {
+            return;
+        }
+        for (Widget w : widgets)
+        {
+            if (w == null)
+            {
+                continue;
+            }
+            try {
+                w.setOnOpListener((JavaScriptCallback) null);
+                w.setHasListener(false);
+                w.setHidden(true);
+                w.setType(0);
+                w.revalidate();
+            } catch (Exception ignored) {}
+        }
     }
 }
