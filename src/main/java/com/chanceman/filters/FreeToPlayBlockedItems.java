@@ -17,6 +17,7 @@ public enum FreeToPlayBlockedItems {
     CursedAmuletOfMagic(ItemID.AMULET_OF_MAGIC_CURSED),
     Dust(ItemID.DUST),
     Fur(ItemID.FUR),
+    SwiftBlade(ItemID.SWIFT_BLADE),
 
     // Dyed boots and gloves
     GreyBoots(ItemID.WOLFENBOOTS_GREY),
