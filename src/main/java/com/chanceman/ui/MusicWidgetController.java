@@ -183,7 +183,14 @@ public class MusicWidgetController
             return new ArrayList<>();
         }
         Widget[] kids = dynamic ? parent.getDynamicChildren() : parent.getChildren();
-        return kids != null ? new ArrayList<>(Arrays.asList(kids)) : new ArrayList<>();
+        if (kids == null) {
+            return new ArrayList<>();
+        }
+        List<Widget> out = new ArrayList<>(kids.length);
+        for (Widget k : kids) {
+            if (k != null) out.add(k);
+        }
+        return out;
     }
 
     private static void restoreChildren(Widget parent, List<Widget> staticKids, List<Widget> dynamicKids)
@@ -198,7 +205,9 @@ public class MusicWidgetController
         {
             for (Widget w : currentStatic)
             {
-                w.setHidden(true);
+                if (w != null) {
+                    w.setHidden(true);
+                }
             }
         }
 
@@ -207,7 +216,9 @@ public class MusicWidgetController
         {
             for (Widget w : currentDyn)
             {
-                w.setHidden(true);
+                if (w != null) {
+                    w.setHidden(true);
+                }
             }
         }
 
@@ -215,14 +226,18 @@ public class MusicWidgetController
         {
             for (Widget w : staticKids)
             {
-                w.setHidden(false);
+                if (w != null && w.getType() != 0) {
+                    w.setHidden(false);
+                }
             }
         }
         if (dynamicKids != null)
         {
             for (Widget w : dynamicKids)
             {
-                w.setHidden(false);
+                if (w != null && w.getType() != 0) {
+                    w.setHidden(false);
+                }
             }
         }
 
