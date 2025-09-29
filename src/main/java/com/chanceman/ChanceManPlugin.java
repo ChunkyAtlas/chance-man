@@ -216,19 +216,7 @@ public class ChanceManPlugin extends Plugin
         }
         if (fileExecutor != null)
         {
-            fileExecutor.shutdown(); // stop accepting new tasks
-            try
-            {
-                if (!fileExecutor.awaitTermination(1500, java.util.concurrent.TimeUnit.MILLISECONDS))
-                {
-                    fileExecutor.shutdownNow(); // cancel leftovers if they hang
-                }
-            }
-            catch (InterruptedException ie)
-            {
-                fileExecutor.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
+            fileExecutor.shutdownNow();
             fileExecutor = null;
 
             if (unlockedItemsManager != null)

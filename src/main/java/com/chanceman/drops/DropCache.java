@@ -437,23 +437,11 @@ public class DropCache
             return;
         }
 
-        executor.shutdown();
-        try {
-            if (!executor.awaitTermination(3, TimeUnit.SECONDS)) {
-                executor.shutdownNow();
-                if (!executor.awaitTermination(2, TimeUnit.SECONDS)) {
-                    log.warn("dropcache-io executor did not terminate cleanly");
-                }
-            }
-        } catch (InterruptedException ie) {
-            executor.shutdownNow();
-            Thread.currentThread().interrupt();
-        } finally {
-            ioExecutor = null;
-            cache.clear();
-            nameIndex.clear();
-            indexLoaded = false;
-        }
+        executor.shutdownNow();
+        ioExecutor = null;
+        cache.clear();
+        nameIndex.clear();
+        indexLoaded = false;
     }
 
     private synchronized ExecutorService ensureExecutor() {
