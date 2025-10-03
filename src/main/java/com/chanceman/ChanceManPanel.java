@@ -51,6 +51,8 @@ public class ChanceManPanel extends PluginPanel
     private final JList<Integer> rolledList = new JList<>(rolledModel);
     private final DefaultListModel<Integer> unlockedModel = new DefaultListModel<>();
     private final JList<Integer> unlockedList = new JList<>(unlockedModel);
+    private TitledBorder rolledBorder;
+    private JPanel rolledContainer;
 
     // View selection row: 3 buttons (swap, filter unlocked-not-rolled, filter unlocked-and-rolled)
     private final JButton swapViewButton = new JButton("🔄");
@@ -194,8 +196,7 @@ public class ChanceManPanel extends PluginPanel
                 JScrollPane.HORIZONTAL_SCROLLBAR_NEVER
         );
         rolledScroll.setPreferredSize(new Dimension(250, 300));
-        JPanel rolledContainer = createTitledPanel("Rolled Items", rolledScroll);
-
+        rolledContainer = createTitledPanel("Rolled Items", rolledScroll);
         unlockedList.setCellRenderer(new ItemCellRenderer());
         unlockedList.setVisibleRowCount(10);
         unlockedList.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
@@ -342,6 +343,47 @@ public class ChanceManPanel extends PluginPanel
         // Directly add the passed-in component (which may itself be a JScrollPane)
         container.add(content, BorderLayout.CENTER);
         return container;
+    }
+
+    /**
+     * Gets outside border on container panel.
+     *
+     * @param panel        titled container panel.
+     * @return The titled border.
+     */
+    private static TitledBorder getTitledBorder(JPanel panel) {
+        Border b = panel.getBorder();
+        if (b instanceof TitledBorder) return (TitledBorder) b;
+        if (b instanceof CompoundBorder) {
+            Border out = ((CompoundBorder) b).getOutsideBorder();
+            if (out instanceof TitledBorder) return (TitledBorder) out;
+        }
+        return null;
+    }
+
+    /**
+     * Sets title to  outside border on container panel.
+     *
+     * @param panel        titled container panel.
+     * @param title        new title of panel.
+     *
+     */
+    public static void setPanelTitle(JPanel panel, String title) {
+        SwingUtilities.invokeLater(() -> {
+            TitledBorder tb = getTitledBorder(panel);
+            if (tb == null) {
+                // fallback: keep padding if present
+                Border padding = (panel.getBorder() instanceof CompoundBorder)
+                        ? ((CompoundBorder) panel.getBorder()).getInsideBorder()
+                        : new EmptyBorder(5,5,5,5);
+                tb = BorderFactory.createTitledBorder(title);
+                panel.setBorder(new CompoundBorder(tb, padding));
+            } else {
+                tb.setTitle(title);
+            }
+            panel.revalidate();
+            panel.repaint();
+        });
     }
 
     /**
@@ -520,70 +562,86 @@ public class ChanceManPanel extends PluginPanel
     {
         clientThread.invokeLater(() ->
         {
-            // Build filtered lists
+            final String q = (searchText == null) ? "" : searchText.toLowerCase();
+
+            final Set<Integer> rolled = new HashSet<>(rolledItemsManager.getRolledItems());
+            final Set<Integer> unlocked = new HashSet<>(unlockedItemsManager.getUnlockedItems());
+
+// Rolled (apply search)
             List<Integer> filteredRolled = new ArrayList<>();
-            for (Integer id : rolledItemsManager.getRolledItems())
+            for (Integer id : rolled)
             {
-                ItemComposition comp = itemManager.getItemComposition(id);
-                if (comp != null)
+                ItemComposition c = itemManager.getItemComposition(id);
+                if (c != null && (q.isEmpty() || c.getName().toLowerCase().contains(q)))
                 {
-                    String name = comp.getName().toLowerCase();
-                    if (searchText.isEmpty() || name.contains(searchText))
-                    {
-                        filteredRolled.add(id);
-                    }
+                    filteredRolled.add(id);
                 }
             }
-
             Collections.reverse(filteredRolled);
 
+// Unlocked (apply search)
             List<Integer> filteredUnlocked = new ArrayList<>();
-            for (Integer id : unlockedItemsManager.getUnlockedItems())
+            for (Integer id : unlocked)
             {
-                ItemComposition comp = itemManager.getItemComposition(id);
-                if (comp != null)
+                ItemComposition c = itemManager.getItemComposition(id);
+                if (c != null && (q.isEmpty() || c.getName().toLowerCase().contains(q)))
                 {
-                    String name = comp.getName().toLowerCase();
-                    if (searchText.isEmpty() || name.contains(searchText))
-                    {
-                        filteredUnlocked.add(id);
-                    }
+                    filteredUnlocked.add(id);
                 }
             }
-
             Collections.reverse(filteredUnlocked);
 
-            // Apply active filter toggles
-            if (activeFilter.equals("UNLOCKED_NOT_ROLLED"))
+            // Not rolled
+            List<Integer> filteredNotRolled = new ArrayList<>();
+            for (Integer id : allTradeableItems)
             {
-                filteredUnlocked.removeIf(id -> rolledItemsManager.getRolledItems().contains(id));
-                filteredRolled.clear();
+                if (rolled.contains(id)) continue;                    // exclude rolled
+                // If “left to get” also means not unlocked, add this:
+                // if (unlocked.contains(id)) continue;
+
+                ItemComposition c = itemManager.getItemComposition(id);
+                if (c != null && (q.isEmpty() || c.getName().toLowerCase().contains(q)))
+                {
+                    filteredNotRolled.add(id);
+                }
             }
-            else if (activeFilter.equals("UNLOCKED_AND_ROLLED"))
-            {
+
+            // Apply active filter toggles
+            String titleText; // toggle rolled panel title
+            String rolledText; // toggle rolled result type
+            if (activeFilter.equals("UNLOCKED_NOT_ROLLED")) {
+                filteredUnlocked.removeIf(id -> rolledItemsManager.getRolledItems().contains(id));
+                filteredRolled = new ArrayList<>(filteredNotRolled); // copy, don't alias
+                titleText = "Items Not Rolled";
+                rolledText = "Not Rolled: ";
+            }
+            else if (activeFilter.equals("UNLOCKED_AND_ROLLED")) {
                 filteredUnlocked.removeIf(id -> !rolledItemsManager.getRolledItems().contains(id));
                 filteredRolled.removeIf(id -> !unlockedItemsManager.getUnlockedItems().contains(id));
+                titleText = "Rolled Items";
+                rolledText = "Rolled:  ";
+            }
+            else {
+                titleText = "Rolled Items";
+                rolledText = "Rolled:  ";
             }
 
-            SwingUtilities.invokeLater(() ->
-            {
+            List<Integer> finalFilteredRolled = filteredRolled;
+            SwingUtilities.invokeLater(() -> {
                 rolledModel.clear();
-                for (int id : filteredRolled)
-                {
-                    rolledModel.addElement(id);
-                }
+                for (int id : finalFilteredRolled) rolledModel.addElement(id);
 
                 unlockedModel.clear();
-                for (int id : filteredUnlocked)
-                {
-                    unlockedModel.addElement(id);
-                }
+                for (int id : filteredUnlocked) unlockedModel.addElement(id);
+
+                setPanelTitle(rolledContainer, titleText); // <— update title on EDT, with counts
 
                 int total = allTradeableItems.size();
                 countLabel.setText(showingUnlocked
                         ? "Unlocked: " + unlockedModel.size() + "/" + total
-                        : "Rolled:  " + rolledModel.size()   + "/" + total);
+                        : rolledText + rolledModel.size()   + "/" + total);
             });
+
         });
     }
 
