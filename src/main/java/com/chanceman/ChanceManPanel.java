@@ -26,6 +26,11 @@ import java.util.*;
 import java.util.List;
 import java.util.function.Consumer;
 
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.Desktop;
+import java.net.URI;
+
 /**
  * Panel for displaying rolled and unlocked items.
  * It provides UI for manual roll actions, search/filter functionality,
@@ -109,10 +114,58 @@ public class ChanceManPanel extends PluginPanel
     }
 
     /**
+     * Sets mouseListener to JList items (rolled, unlocked)
+     */
+    private void initMouseClickListeners()
+    {
+        rolledList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) { // Double-click to open
+                    int index = rolledList.locationToIndex(e.getPoint());
+                    if (index >= 0) {
+                        int itemId = rolledModel.get(index);
+                        String itemName = itemNameCache.getOrDefault(itemId, "Unknown_item_" + itemId);
+                        String wikiUrl = "https://oldschool.runescape.wiki/w/" + itemName.replace(" ", "_");
+
+                        try {
+                            Desktop.getDesktop().browse(URI.create(wikiUrl));
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                        }
+                    }
+                }
+            }
+        });
+
+        unlockedList.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2) { // Double-click
+                    int index = unlockedList.locationToIndex(e.getPoint());
+                    if (index >= 0) {
+                        int itemId = unlockedModel.get(index);
+                        String itemName = itemNameCache.getOrDefault(itemId, "Unknown_item_" + itemId);
+                        String wikiUrl = "https://oldschool.runescape.wiki/w/" + itemName.replace(" ", "_");
+
+                        try {
+                            Desktop.getDesktop().browse(URI.create(wikiUrl));
+                        } catch (Exception ex) {
+                            ex.printStackTrace();
+                        }
+                    }
+                }
+            }
+        });
+    }
+    /**
      * Initializes the panel UI components.
      */
     private void init()
     {
+        // mouse listeners to load wiki urls on double click
+        initMouseClickListeners();
+
         setLayout(new BorderLayout());
         setBorder(new EmptyBorder(15, 15, 15, 15));
         setBackground(new Color(37, 37, 37));
