@@ -67,6 +67,15 @@ public class ChanceManOverlay extends Overlay {
 
     private final List<Integer> rollingItems = Collections.synchronizedList(new ArrayList<>());
 
+    private static float toDb(int percent) {
+        int p = Math.max(0, Math.min(100, percent));
+        if (p == 0) {
+            return -80.0f; // effectively mute
+        }
+        double lin = p / 100.0;
+        return (float) (20.0 * Math.log10(lin));
+    }
+
     // Textures
     private final BufferedImage rollBoxImage =
             ImageUtil.loadImageResource(getClass(), "/com/chanceman/roll_box.png");
@@ -118,7 +127,8 @@ public class ChanceManOverlay extends Overlay {
     public void startRollAnimation(int dummy, int rollDurationMs, Supplier<Integer> randomLockedItemSupplier) {
         if (config.enableRollSounds()) {
             try {
-                audioPlayer.play(ChanceManOverlay.class, "/com/chanceman/tick.wav", 0.0f);
+                float volumeDb = toDb(config.rollSoundVolume());
+                audioPlayer.play( ChanceManOverlay.class,"/com/chanceman/tick.wav", volumeDb);
             } catch (IOException | UnsupportedAudioFileException | LineUnavailableException ex) {
                 log.warn("ChanceMan: failed to play tick.wav", ex);
             }
