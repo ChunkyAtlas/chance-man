@@ -8,8 +8,8 @@ import lombok.Setter;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.ItemComposition;
-import net.runelite.client.game.ItemManager;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.ColorUtil;
 
 import javax.inject.Inject;
@@ -39,7 +39,7 @@ public class RollAnimationManager
     private final Queue<Integer> rollQueue = new ConcurrentLinkedQueue<>();
     private ExecutorService executor = Executors.newSingleThreadExecutor();
     private volatile boolean isRolling = false;
-    private final int rollDuration = 3000; // Continuous phase duration (ms)
+    private static final int SNAP_WINDOW_MS = 350;
     private final Random random = new Random();
 
     @Getter
@@ -70,15 +70,21 @@ public class RollAnimationManager
     }
 
     /**
-     * Performs the roll animation, unlocking the final item and sending a chat message.
+     * Performs the roll animation.
+     * Now announces/unlocks as soon as the item is selected (after the snap),
+     * while still letting the highlight finish visually before accepting another roll.
      */
     private void performRoll(int queuedItemId)
     {
+        // Duration of the continuous spin phase (ms)
+        int rollDuration = 3000;
         overlay.startRollAnimation(0, rollDuration, this::getRandomLockedItem);
+
         try {
-            int highlightDuration = overlay.getHighlightDurationMs();
-            Thread.sleep(rollDuration + (long) highlightDuration);
-        } catch (InterruptedException e) {
+            Thread.sleep(rollDuration + SNAP_WINDOW_MS);
+        }
+        catch (InterruptedException e)
+        {
             Thread.currentThread().interrupt();
         }
         int finalRolledItem = overlay.getFinalItem();
@@ -102,6 +108,20 @@ public class RollAnimationManager
                 SwingUtilities.invokeLater(() -> chanceManPanel.updatePanel());
             }
         });
+
+        int remainingHighlight = Math.max(0, overlay.getHighlightDurationMs() - SNAP_WINDOW_MS);
+        if (remainingHighlight > 0)
+        {
+            try
+            {
+                Thread.sleep(remainingHighlight);
+            }
+            catch (InterruptedException e)
+            {
+                Thread.currentThread().interrupt();
+            }
+        }
+
         setManualRoll(false);
         isRolling = false;
     }
@@ -132,17 +152,16 @@ public class RollAnimationManager
         }
         if (locked.isEmpty())
         {
-            int fallback = overlay.getFinalItem();
-            return fallback;
+            // Fallback: keep showing the current center item
+            return overlay.getFinalItem();
         }
-        int selected = locked.get(random.nextInt(locked.size()));
-        return selected;
+        return locked.get(random.nextInt(locked.size()));
     }
 
     public String getItemName(int itemId)
     {
         ItemComposition comp = itemManager.getItemComposition(itemId);
-        return comp != null ? comp.getName() : "Unknown";
+        return comp.getName();
     }
 
     public void startUp() {
