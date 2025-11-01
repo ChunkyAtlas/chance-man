@@ -35,7 +35,7 @@ import java.util.concurrent.*;
 @Singleton
 public class DropFetcher
 {
-    private static final String USER_AGENT = "RuneLite-ChanceMan/2.7.2";
+    private static final String USER_AGENT = "RuneLite-ChanceMan/2.8.0";
     private final OkHttpClient httpClient;
     private final ItemManager itemManager;
     private final ClientThread clientThread;
