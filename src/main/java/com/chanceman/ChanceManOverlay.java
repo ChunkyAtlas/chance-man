@@ -89,18 +89,18 @@ public class ChanceManOverlay extends Overlay {
 
     // Animation state
     private volatile boolean isAnimating = false;
-    private long rollDurationMs;
-    private long rollStartMs = 0L;
+    private volatile long rollDurationMs;
+    private volatile long rollStartNs = 0L;
 
     // Motion state
     private float rollOffset = 0f; // cumulative horizontal scroll in px
     private float currentSpeed = INITIAL_SPEED; // px/s
     private Supplier<Integer> randomLockedItemSupplier;
-    private long lastUpdateNanos = 0L;
+    private volatile long lastUpdateNanos = 0L;
 
     // Snap state
     private boolean isSnapping = false;
-    private long snapStartMs = 0L;
+    private long snapStartNs = 0L;
     private float snapBase;
     private float snapResidualStart;
     private float snapTarget;
@@ -135,7 +135,7 @@ public class ChanceManOverlay extends Overlay {
         }
 
         this.rollDurationMs = rollDurationMs;
-        this.rollStartMs = System.currentTimeMillis();
+        this.rollStartNs = System.nanoTime();
         this.rollOffset = 0f;
         this.currentSpeed = INITIAL_SPEED;
         this.randomLockedItemSupplier = randomLockedItemSupplier;
@@ -143,7 +143,7 @@ public class ChanceManOverlay extends Overlay {
         this.lastUpdateNanos = System.nanoTime();
 
         this.isSnapping = false;
-        this.snapStartMs = 0L;
+        this.snapStartNs = 0L;
         this.snapBase = 0f;
         this.snapResidualStart = 0f;
         this.snapTarget = 0f;
@@ -193,12 +193,12 @@ public class ChanceManOverlay extends Overlay {
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
-        final long nowMs = System.currentTimeMillis();
-        final long elapsed = nowMs - rollStartMs;
-        final boolean inHighlightPhase = (elapsed > rollDurationMs);
+        final long nowNs = System.nanoTime();
+        final long elapsedMs = (nowNs - rollStartNs) / 1_000_000L;
+        final boolean inHighlightPhase = (elapsedMs > rollDurationMs);
 
         // Stop after highlight
-        if (elapsed > rollDurationMs + HIGHLIGHT_DURATION_MS) {
+        if (elapsedMs > rollDurationMs + HIGHLIGHT_DURATION_MS) {
             isAnimating = false;
             return null;
         }
@@ -207,12 +207,12 @@ public class ChanceManOverlay extends Overlay {
         final long nowNanos = System.nanoTime();
         float dt = 0f;
         if (lastUpdateNanos != 0L) {
-            dt = (nowNanos - lastUpdateNanos) / 1_000_000_000f;
+            dt = (nowNs - lastUpdateNanos) / 1_000_000_000f;
             if (dt > MAX_DT) dt = MAX_DT;
         }
-        lastUpdateNanos = nowNanos;
+        lastUpdateNanos = nowNs;
 
-        final float t = (rollDurationMs > 0) ? Math.min(1f, elapsed / (float) rollDurationMs) : 1f;
+        final float t = (rollDurationMs > 0) ? Math.min(1f, elapsedMs / (float) rollDurationMs) : 1f;
         final float eased = (float) Math.pow(1f - t, 3);
         currentSpeed = MIN_SPEED + (INITIAL_SPEED - MIN_SPEED) * eased;
 
@@ -255,24 +255,18 @@ public class ChanceManOverlay extends Overlay {
         g.setClip(contentLeftX, boxTopY + OUTER_PAD, innerWidth, ICON_H);
 
         synchronized (rollingItems) {
-            // Begin snap near the end of spin
-            if (!inHighlightPhase && !isSnapping && (rollStartMs + rollDurationMs - nowMs) <= SNAP_DURATION_MS) {
-                isSnapping = true;
-                snapStartMs = nowMs;
-
-                final float k = (float) Math.floor(rollOffset / STEP);
-                snapBase = k * STEP;
-                snapResidualStart = rollOffset - snapBase; // [0, STEP)
-                final boolean goNext = (snapResidualStart / STEP) >= SNAP_NEXT_THRESHOLD;
-                winnerDelta = goNext ? 1 : 0;
-                snapTarget = goNext ? (snapBase + STEP) : snapBase;
+            // Begin snap near the end of spin (or immediately if we already hit highlight)
+            final long remainingMs = rollDurationMs - elapsedMs;
+            if (!isSnapping && (remainingMs <= SNAP_DURATION_MS || inHighlightPhase)) {
+                startSnap(nowNs);
             }
 
             // Advance motion
             if (!inHighlightPhase) {
                 if (isSnapping) {
                     // Smoothstep to the target slot
-                    final float u = Math.min(1f, (nowMs - snapStartMs) / (float) SNAP_DURATION_MS);
+                    final long snapElapsedNs = nowNs - snapStartNs;
+                    final float u = Math.min(1f, snapElapsedNs / (SNAP_DURATION_MS * 1_000_000f));
                     final float s = u * u * (3f - 2f * u);
                     final float start = rollOffset;
                     final float end = snapTarget;
@@ -392,5 +386,20 @@ public class ChanceManOverlay extends Overlay {
                 rollingItems.add(randomLockedItemSupplier.get());
             }
         }
+    }
+    /**
+     * Initializes snap state targeting the nearest slot boundary.
+     * Ensures roll always aligns to a slot even if the highlight phase began before the snap window ticked.
+     */
+    private void startSnap(long nowNs) {
+        isSnapping = true;
+        snapStartNs = nowNs;
+
+        final float k = (float) Math.floor(rollOffset / STEP);
+        snapBase = k * STEP;
+        snapResidualStart = rollOffset - snapBase; // [0, STEP)
+        final boolean goNext = (snapResidualStart / STEP) >= SNAP_NEXT_THRESHOLD;
+        winnerDelta = goNext ? 1 : 0;
+        snapTarget = goNext ? (snapBase + STEP) : snapBase;
     }
 }

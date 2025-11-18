@@ -6,6 +6,7 @@ import net.runelite.api.*;
 import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.gameval.InventoryID;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.ItemID;
 import net.runelite.api.events.GameTick;
 import net.runelite.api.widgets.Widget;
@@ -52,8 +53,8 @@ public class Restrictions
 
 	}
 
-	public static final int SPELL_REQUIREMENT_OVERLAY_NORMAL = 14287051;
-	public static final int AUTOCAST_REQUIREMENT_OVERLAY_NORMAL = 13172738;
+	public static final int SPELL_REQUIREMENT_OVERLAY_NORMAL = InterfaceID.MagicSpellbook.TOOLTIP;
+	public static final int AUTOCAST_REQUIREMENT_OVERLAY_NORMAL = InterfaceID.Autocast.INFO;
 
 	@Inject private ChanceManPlugin plugin;
 	@Inject private Client client;
