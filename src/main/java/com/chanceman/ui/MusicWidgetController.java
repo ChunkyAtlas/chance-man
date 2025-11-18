@@ -15,11 +15,13 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.ScriptEvent;
+import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.ItemQuantityMode;
 import net.runelite.api.widgets.JavaScriptCallback;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetType;
 import net.runelite.client.callback.ClientThread;
+import net.runelite.client.eventbus.Subscribe;
 
 @Slf4j
 @Singleton
@@ -362,13 +364,12 @@ public class MusicWidgetController
         eye.setHasListener(true);
 
         int searchX = eyeX + EYE_SIZE + PADDING;
-        int searchY = eyeY;
 
         Widget search = root.createChild(-1);
         search.setHidden(false);
         search.setType(WidgetType.GRAPHIC);
         search.setOriginalX(searchX);
-        search.setOriginalY(searchY);
+        search.setOriginalY(eyeY);
         search.setOriginalWidth(EYE_SIZE);
         search.setOriginalHeight(EYE_SIZE);
         search.setSpriteId(SEARCH_SPRITE);
@@ -498,6 +499,7 @@ public class MusicWidgetController
 
     private void applyOverride(NpcDropData dropData)
     {
+        purgeOverrideWidgets();
         iconItemMap.clear();
         int[] toHide = {9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
         for (int childId : toHide)
@@ -688,6 +690,51 @@ public class MusicWidgetController
         musicSearchButton.onOverrideDeactivated();
     }
 
+    @Subscribe
+    private void onWidgetLoaded(WidgetLoaded event)
+    {
+        if (event.getGroupId() != MUSIC_GROUP)
+        {
+            return;
+        }
+
+        if (!overrideActive || currentDrops == null)
+        {
+            return;
+        }
+
+        clientThread.invokeLater(() ->
+        {
+            if (!overrideActive || currentDrops == null)
+            {
+                return;
+            }
+
+            resetWidgetCaches();
+            applyOverride(currentDrops);
+        });
+    }
+
+    private void resetWidgetCaches()
+    {
+        purgeOverrideWidgets();
+        backupRootStaticKids = null;
+        backupRootDynamicKids = null;
+        backupScrollStaticKids = null;
+        backupScrollDynamicKids = null;
+        backupJukeboxStaticKids = null;
+        backupJukeboxDynamicKids = null;
+        originalRootType = null;
+        originalTitleText = null;
+    }
+
+    private void purgeOverrideWidgets()
+    {
+        purgeWidgets(overrideRootWidgets);
+        purgeWidgets(overrideScrollWidgets);
+        overrideRootWidgets.clear();
+        overrideScrollWidgets.clear();
+    }
 
     /**
      * Forcefully removes widgets we created during override so they cannot

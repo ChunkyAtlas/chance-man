@@ -174,6 +174,7 @@ public class ChanceManPlugin extends Plugin
                 .build();
         clientToolbar.addNavigation(navButton);
 
+        eventBus.register(musicWidgetController);
         eventBus.register(musicSearchButton);
         musicSearchButton.onStart();
     }
@@ -195,6 +196,7 @@ public class ChanceManPlugin extends Plugin
         clientThread.invokeLater(musicWidgetController::restore);
         musicSearchButton.onStop();
         eventBus.unregister(musicSearchButton);
+        eventBus.unregister(musicWidgetController);
         dropsTabUI.shutDown();
         eventBus.unregister(itemDimmerController);
         eventBus.unregister(accountManager);

@@ -70,6 +70,10 @@ public class MusicSearchButton {
             y = Math.max(6, frame.getOriginalY() - H - GAP);
         }
 
+        if (icon != null && icon.getParentId() != contents.getId()) {
+            icon = null;
+        }
+
         if (icon == null) {
             icon = contents.createChild(-1, WidgetType.GRAPHIC);
             icon.setHasListener(true);
