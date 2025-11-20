@@ -6,6 +6,8 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+import net.runelite.api.gameval.ItemID;
+
 /**
  * Maps ensouled head item IDs (including untradeable drop IDs) to their tradeable IDs.
  * Non-ensouled or unknown IDs are returned unchanged by {@link #toTradeableId(int)}.
@@ -23,28 +25,29 @@ public final class EnsouledHeadMapping {
             idMap.put(tradeable, tradeable);
         };
 
-        pair.accept(13447, 13448); // Goblin
-        pair.accept(13450, 13451); // Monkey
-        pair.accept(13453, 13454); // Imp
-        pair.accept(13456, 13457); // Minotaur
-        pair.accept(13459, 13460); // Scorpion
-        pair.accept(13462, 13463); // Bear
-        pair.accept(13465, 13466); // Unicorn
-        pair.accept(13468, 13469); // Dog
-        pair.accept(13471, 13472); // Chaos Druid
-        pair.accept(13477, 13478); // Ogre
-        pair.accept(13480, 13481); // Elf
-        pair.accept(13483, 13484); // Troll
-        pair.accept(13486, 13487); // Horror
-        pair.accept(13489, 13490); // Kalphite
-        pair.accept(13492, 13493); // Dagannoth
-        pair.accept(13495, 13496); // Bloodveld
-        pair.accept(13498, 13499); // TzHaar
-        pair.accept(13501, 13502); // Demon
-        pair.accept(26996, 26997); // Hellhound
-        pair.accept(13504, 13505); // Aviansie
-        pair.accept(13507, 13508); // Abyssal
-        pair.accept(13510, 13511); // Dragon
+        pair.accept(ItemID.ARCEUUS_CORPSE_GOBLIN_INITIAL, ItemID.ARCEUUS_CORPSE_GOBLIN); // Goblin
+        pair.accept(ItemID.ARCEUUS_CORPSE_MONKEY_INITIAL, ItemID.ARCEUUS_CORPSE_MONKEY); // Monkey
+        pair.accept(ItemID.ARCEUUS_CORPSE_IMP_INITIAL, ItemID.ARCEUUS_CORPSE_IMP); // Imp
+        pair.accept(ItemID.ARCEUUS_CORPSE_MINOTAUR_INITIAL, ItemID.ARCEUUS_CORPSE_MINOTAUR); // Minotaur
+        pair.accept(ItemID.ARCEUUS_CORPSE_SCORPION_INITIAL, ItemID.ARCEUUS_CORPSE_SCORPION); // Scorpion
+        pair.accept(ItemID.ARCEUUS_CORPSE_BEAR_INITIAL, ItemID.ARCEUUS_CORPSE_BEAR); // Bear
+        pair.accept(ItemID.ARCEUUS_CORPSE_UNICORN_INITIAL, ItemID.ARCEUUS_CORPSE_UNICORN ); // Unicorn
+        pair.accept(ItemID.ARCEUUS_CORPSE_DOG_INITIAL, ItemID.ARCEUUS_CORPSE_DOG); // Dog
+        pair.accept(ItemID.ARCEUUS_CORPSE_CHAOSDRUID_INITIAL, ItemID.ARCEUUS_CORPSE_CHAOSDRUID); // Chaos Druid
+        pair.accept(ItemID.ARCEUUS_CORPSE_GIANT_INITIAL, ItemID.ARCEUUS_CORPSE_GIANT); // Giant
+        pair.accept(ItemID.ARCEUUS_CORPSE_OGRE_INITIAL, ItemID.ARCEUUS_CORPSE_OGRE); // Ogre
+        pair.accept(ItemID.ARCEUUS_CORPSE_ELF_INITIAL, ItemID.ARCEUUS_CORPSE_ELF); // Elf
+        pair.accept(ItemID.ARCEUUS_CORPSE_TROLL_INITIAL, ItemID.ARCEUUS_CORPSE_TROLL); // Troll
+        pair.accept(ItemID.ARCEUUS_CORPSE_HORROR_INITIAL, ItemID.ARCEUUS_CORPSE_HORROR); // Horror
+        pair.accept(ItemID.ARCEUUS_CORPSE_KALPHITE_INITIAL, ItemID.ARCEUUS_CORPSE_KALPHITE); // Kalphite
+        pair.accept(ItemID.ARCEUUS_CORPSE_DAGANNOTH_INITIAL, ItemID.ARCEUUS_CORPSE_DAGANNOTH); // Dagannoth
+        pair.accept(ItemID.ARCEUUS_CORPSE_BLOODVELD_INITIAL, ItemID.ARCEUUS_CORPSE_BLOODVELD); // Bloodveld
+        pair.accept(ItemID.ARCEUUS_CORPSE_TZHAAR_INITIAL, ItemID.ARCEUUS_CORPSE_TZHAAR); // TzHaar
+        pair.accept(ItemID.ARCEUUS_CORPSE_DEMON_INITIAL, ItemID.ARCEUUS_CORPSE_DEMON); // Demon
+        pair.accept(ItemID.ARCEUUS_CORPSE_AVIANSIE_INITIAL, ItemID.ARCEUUS_CORPSE_AVIANSIE); //Aviansie
+        pair.accept(ItemID.ARCEUUS_CORPSE_ABYSSAL_INITIAL, ItemID.ARCEUUS_CORPSE_ABYSSAL); // Abyssal
+        pair.accept(ItemID.ARCEUUS_CORPSE_DRAGON_INITIAL, ItemID.ARCEUUS_CORPSE_DRAGON); // Dragon
+        pair.accept(ItemID.ARCEUUS_CORPSE_HELLHOUND_INITIAL, ItemID.ARCEUUS_CORPSE_HELLHOUND); // Hellhound
 
         ENSOULED_CANONICAL_ID = Collections.unmodifiableMap(idMap);
     }
