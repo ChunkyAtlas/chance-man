@@ -283,6 +283,7 @@ public final class BlockedItems {
         blocked.add(ItemID.BINGO_TORCH_SCROLL); // Grid master torch scroll
 
         // Unobtainable Items
+        blocked.add(ItemID.BALL_OF_COTTON);
         blocked.add(ItemID.CHOMPY_COOKED); // Cooked Chompy (roasted)
         blocked.add(ItemID.CHICKENQUEST_CORNFLOUR); // Cornflour
         blocked.add(ItemID.POH_FLATPACK_CRYSTALBALL1); // Crystal Ball (FLATPACK)
