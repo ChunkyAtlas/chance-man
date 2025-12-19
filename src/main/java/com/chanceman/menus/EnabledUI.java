@@ -8,7 +8,9 @@ public enum EnabledUI
 {
 	BANK(InterfaceID.BANKMAIN, true, true),
 	DEPOSIT_BOX(InterfaceID.BANK_DEPOSITBOX, true, true),
-	CUSTOM_FUR_STORE(InterfaceID.HuntingCustomfurs.CONTENT, false, true);
+	CUSTOM_FUR_STORE(InterfaceID.HuntingCustomfurs.CONTENT, false, true),
+	TTREK_REWARDS(InterfaceID.TREK_REWARDS,false, true),
+	RUNEDOKU(InterfaceID.ROGUETRADER_SUDOKU, false, true);
 
 	private final int id; // group id
 	private final boolean greyLockedItems; // should grey/disable locked items in this UI
