@@ -61,8 +61,7 @@ public class ActionHandler {
 	}
 
 	private final HashSet<Integer> enabledUIs = new HashSet<>() {{
-		add(EnabledUI.BANK.getId());
-		add(EnabledUI.DEPOSIT_BOX.getId());
+		for (EnabledUI ui : EnabledUI.values()) add(ui.getId());
 	}};
 
 	@Inject
@@ -98,6 +97,11 @@ public class ActionHandler {
 		return enabledUIOpen != -1;
 	}
 
+	private EnabledUI currentEnabledUi()
+	{
+		return enabledUIOpen == -1 ? null : EnabledUI.fromGroupId(enabledUIOpen);
+	}
+
 	private boolean inactive() {
 		if (!unlockedItemsManager.ready()) return true;
 		return client.getGameState().getState() < GameState.LOADING.getState();
@@ -105,8 +109,7 @@ public class ActionHandler {
 
 	@Subscribe
 	public void onWidgetClosed(WidgetClosed event) {
-		if (enabledUIs.contains(event.getGroupId()))
-			enabledUIOpen = -1;
+		if (event.getGroupId() == enabledUIOpen) enabledUIOpen = -1;
 	}
 
 	@Subscribe
@@ -118,6 +121,12 @@ public class ActionHandler {
 	@Subscribe
 	public void onMenuEntryAdded(MenuEntryAdded event) {
 		if (inactive()) return;
+
+		EnabledUI ui = currentEnabledUi();
+		if (ui != null && !ui.isGreyLockedItems())
+		{
+			return;
+		}
 
 		MenuEntry entry = event.getMenuEntry();
 		MenuAction action = entry.getType();
@@ -180,6 +189,12 @@ public class ActionHandler {
 		String option = Text.removeTags(entry.getOption());
 		String target = Text.removeTags(entry.getTarget());
 
+		EnabledUI ui = currentEnabledUi();
+		if (ui != null && ui.isAllowAllActions())
+		{
+			return true;
+		}
+
 		// Always allow "Drop"
 		if (option.equalsIgnoreCase("drop") || option.equalsIgnoreCase("check"))
 			return true;
@@ -195,13 +210,7 @@ public class ActionHandler {
 		if (Spell.isSpell(target))
 			return restrictions.isSpellOpEnabled(target);
 
-		boolean enabled;
-		if (enabledUiOpen()) {
-			enabled = option.startsWith("Deposit") || option.startsWith("Examine") || option.startsWith("Withdraw")
-					|| option.startsWith("Release") || option.startsWith("Destroy");
-		} else {
-			enabled = !disabledActions.contains(action);
-		}
+		boolean enabled = !disabledActions.contains(action);
 		if (enabled)
 			return true;
 		if (id == 0 || id == -1 || !plugin.isInPlay(id))
