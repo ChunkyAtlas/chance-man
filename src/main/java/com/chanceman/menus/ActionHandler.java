@@ -14,6 +14,7 @@ import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
@@ -43,6 +44,8 @@ public class ActionHandler {
 			MenuAction.GROUND_ITEM_FOURTH_OPTION,
 			MenuAction.GROUND_ITEM_FIFTH_OPTION
 	);
+
+	private static final int ORBS_GROUP = (InterfaceID.Orbs.UNIVERSE >>> 16);
 
 	/**
 	 * Normalize a MenuEntryAdded into the base item ID.
@@ -181,11 +184,30 @@ public class ActionHandler {
 				&& !unlockedItemsManager.isUnlocked(itemId);
 	}
 
+	private boolean isHealthOrbCure(MenuEntry entry)
+	{
+		if (entry.getType() != MenuAction.CC_OP)
+			return false;
+
+		if (!"cure".equalsIgnoreCase(Text.removeTags(entry.getOption())))
+			return false;
+
+		int w1 = entry.getParam1();
+		int w0 = entry.getParam0();
+
+		return (w1 >>> 16) == ORBS_GROUP || (w0 >>> 16) == ORBS_GROUP;
+	}
+
 	/**
 	 * This method handles non-ground items (or any other cases) by checking if the item is enabled.
 	 * It returns true if the action should be allowed.
 	 */
 	private boolean isEnabled(int id, MenuEntry entry, MenuAction action) {
+		if (isHealthOrbCure(entry))
+		{
+			return true;
+		}
+
 		String option = Text.removeTags(entry.getOption());
 		String target = Text.removeTags(entry.getTarget());
 
