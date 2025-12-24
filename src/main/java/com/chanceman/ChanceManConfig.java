@@ -108,10 +108,21 @@ public interface ChanceManConfig extends Config
     default boolean showGemDropTable() { return true; }
 
     @ConfigItem(
+            keyName = "showDropsAlwaysOpen",
+            name = "Show Drops Always Open",
+            description = "Keep the Show Drops view active when switching away from the Music tab. Use the close button to exit.",
+            position = 12
+    )
+    default boolean showDropsAlwaysOpen()
+    {
+        return false;
+    }
+
+    @ConfigItem(
             keyName = "deprioritizeLockedOptions",
             name = "Deprioritize Locked Menu Options",
             description = "Sorts locked menu options below the Walk Here option.",
-            position = 12
+            position = 13
     )
     default boolean deprioritizeLockedOptions() { return true; }
 
@@ -119,7 +130,7 @@ public interface ChanceManConfig extends Config
             keyName = "unlockedItemColor",
             name = "Unlocked Item Color",
             description = "Color of the unlocked item name in chat messages.",
-            position = 13
+            position = 14
     )
     default Color unlockedItemColor()
     {
@@ -130,7 +141,7 @@ public interface ChanceManConfig extends Config
             keyName = "rolledItemColor",
             name = "Rolled Item Color",
             description = "Color of the item used to unlock another item.",
-            position = 14
+            position = 15
     )
     default Color rolledItemColor()
     {
@@ -141,7 +152,7 @@ public interface ChanceManConfig extends Config
             keyName = "dimLockedItemsEnabled",
             name = "Dim locked items",
             description = "Dim any item icons that have not been unlocked.",
-            position = 15
+            position = 16
     )
     default boolean dimLockedItemsEnabled()
     {
@@ -153,7 +164,7 @@ public interface ChanceManConfig extends Config
             keyName = "dimLockedItemsOpacity",
             name = "Dim opacity",
             description = "0 = no dim (fully visible), 255 = fully transparent.",
-            position = 16
+            position = 17
     )
     default int dimLockedItemsOpacity()
     {

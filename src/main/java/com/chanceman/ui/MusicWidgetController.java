@@ -266,6 +266,24 @@ public class MusicWidgetController
         int fontId = title != null ? title.getFontId() : 0;
         boolean shadowed = title != null && title.getTextShadowed();
 
+        final int CLOSE_SPRITE = 520;
+        final int CLOSE_SIZE = 10;
+        final int CLOSE_PAD  = 4;
+
+        Widget close = root.createChild(-1);
+        close.setHidden(false);
+        close.setType(WidgetType.GRAPHIC);
+        close.setOriginalX(CLOSE_PAD);
+        close.setOriginalY(CLOSE_PAD);
+        close.setOriginalWidth(CLOSE_SIZE);
+        close.setOriginalHeight(CLOSE_SIZE);
+        close.setSpriteId(CLOSE_SPRITE);
+        close.setAction(0, "Close");
+        close.setHasListener(true);
+        close.setOnOpListener((JavaScriptCallback) (ScriptEvent ev) -> restore());
+        close.revalidate();
+        overrideRootWidgets.add(close);
+
         int lvlX = Objects.requireNonNull(title).getOriginalX() + title.getOriginalWidth() + 83;
         int lvlY = title.getOriginalY();
 
