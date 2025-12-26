@@ -14,6 +14,7 @@ public enum SkillOp
 	CAGE("Cage"),
 	BAIT("Bait"),
 	LURE("Lure"),
+	HARPOON("Harpoon"),
 	RAKE("Rake"),
 	PRUNE("Prune"),
 	CURE("Cure"),
