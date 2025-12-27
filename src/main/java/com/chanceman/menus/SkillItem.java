@@ -42,8 +42,8 @@ public enum SkillItem
 	GILDED_PICKAXE(23276, SkillOp.MINE),
 	THIRD_AGE_PICKAXE(20014, SkillOp.MINE),
 
-	SMALL_FISHING_NET(303, SkillOp.NET),
-	BIG_FISHING_NET(305, SkillOp.NET),
+	SMALL_FISHING_NET(303, SkillOp.SMALL_NET),
+	BIG_FISHING_NET(305, SkillOp.BIG_NET),
 	LOBSTER_POT(301, SkillOp.CAGE),
 	FISHING_BAIT(313, SkillOp.BAIT),
 	FLY_FISHING_ROD(309, SkillOp.LURE),
@@ -121,7 +121,7 @@ public enum SkillItem
 	// Untradeables that conflict
 	OAK_BLACKJACK(4599, SkillOp.LURE, false),
 	RED_VINE_WORMS(25, SkillOp.BAIT, false),
-	BOBS_NET(6209, SkillOp.NET, false);
+	BOBS_NET(6209, SkillOp.SMALL_NET, false);
 
 	private final int id;
 	private final SkillOp option;

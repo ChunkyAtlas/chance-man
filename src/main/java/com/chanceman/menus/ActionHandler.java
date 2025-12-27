@@ -6,15 +6,13 @@ import com.chanceman.filters.EnsouledHeadMapping;
 import com.chanceman.managers.UnlockedItemsManager;
 import lombok.Getter;
 import lombok.Setter;
-import net.runelite.api.Client;
-import net.runelite.api.GameState;
-import net.runelite.api.MenuAction;
-import net.runelite.api.MenuEntry;
+import net.runelite.api.*;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.WidgetClosed;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
+import net.runelite.api.gameval.InventoryID;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
@@ -225,6 +223,10 @@ public class ActionHandler {
 			if (!plugin.isInPlay(id)) { return true; }
 			return unlockedItemsManager.isUnlocked(id);
 		}
+		if ("harpoon".equalsIgnoreCase(option)
+				&& target.toLowerCase().contains("fishing spot")
+				&& !hasAnyHarpoonInInvOrWorn())
+			return true; // barehanded barbarian fishing
 		if (SkillOp.isSkillOp(option))
 			return restrictions.isSkillOpEnabled(option);
 		if (Spell.isSpell(option))
@@ -259,5 +261,34 @@ public class ActionHandler {
 				event.consume();
 			}
 		}
+	}
+	/**
+	 Checks for harpoon in inventory and worn items for
+	 barbarian fishing.
+	 **/
+	private boolean hasAnyHarpoonInInvOrWorn()
+	{
+		ItemContainer worn = client.getItemContainer(net.runelite.api.gameval.InventoryID.WORN);
+		ItemContainer inv  = client.getItemContainer(InventoryID.INV);
+
+		if (worn != null)
+		{
+			for (Item item : worn.getItems())
+			{
+				SkillItem si = SkillItem.fromId(item.getId());
+				if (si != null && si.getSkillOp() == SkillOp.HARPOON) return true;
+			}
+		}
+
+		if (inv != null)
+		{
+			for (Item item : inv.getItems())
+			{
+				SkillItem si = SkillItem.fromId(item.getId());
+				if (si != null && si.getSkillOp() == SkillOp.HARPOON) return true;
+			}
+		}
+
+		return false;
 	}
 }
