@@ -229,9 +229,12 @@ public class ActionHandler {
 			return unlockedItemsManager.isUnlocked(id);
 		}
 		if ("harpoon".equalsIgnoreCase(option)
-				&& target.toLowerCase().contains("fishing spot")
 				&& !hasAnyHarpoonInInvOrWorn())
-			return true; // barehanded barbarian fishing
+		{
+			String t = target.toLowerCase();
+			if (t.contains("fishing spot") || t.contains("spirit pool"))
+				return true;
+		}
 		if (SkillOp.isSkillOp(option))
 			return restrictions.isSkillOpEnabled(option);
 		if (Spell.isSpell(option))
@@ -273,7 +276,7 @@ public class ActionHandler {
 	 **/
 	private boolean hasAnyHarpoonInInvOrWorn()
 	{
-		ItemContainer worn = client.getItemContainer(net.runelite.api.gameval.InventoryID.WORN);
+		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
 		ItemContainer inv  = client.getItemContainer(InventoryID.INV);
 
 		if (worn != null)
