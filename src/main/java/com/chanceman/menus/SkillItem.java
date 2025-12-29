@@ -121,6 +121,8 @@ public enum SkillItem
 	// Untradeables that conflict
 	OAK_BLACKJACK(4599, SkillOp.LURE, false),
 	RED_VINE_WORMS(25, SkillOp.BAIT, false),
+	ELEMENTAL_METAL(2893, SkillOp.SMITH, false),
+	PRIMED_MIND_BAR(9728, SkillOp.SMITH, false),
 	BOBS_NET(6209, SkillOp.SMALL_NET, false);
 
 	private final int id;

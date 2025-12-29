@@ -1,6 +1,7 @@
 package com.chanceman.menus;
 
 import lombok.Getter;
+import net.runelite.api.annotations.Interface;
 import net.runelite.api.gameval.InterfaceID;
 
 @Getter
@@ -11,6 +12,7 @@ public enum EnabledUI
 	CUSTOM_FUR_STORE(InterfaceID.HuntingCustomfurs.CONTENT, false, true),
 	Crafting_Gold(InterfaceID.CraftingGold.UNIVERSE, false, true),
 	TTREK_REWARDS(InterfaceID.TREK_REWARDS,false, true),
+	SKILLMULTI(InterfaceID.Skillmulti.ALL, false, true),
 	RUNEDOKU(InterfaceID.ROGUETRADER_SUDOKU, false, true);
 
 	private final int id; // group id
