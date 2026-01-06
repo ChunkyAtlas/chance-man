@@ -48,6 +48,21 @@ public class ActionHandler {
 			MenuAction.GROUND_ITEM_FIFTH_OPTION
 	);
 
+	private static final Set<Integer> ALWAYS_ALLOW_OBJECT_IDS = new HashSet<>();
+
+	private static final EnumSet<MenuAction> GAME_OBJECT_ACTIONS = EnumSet.of(
+			MenuAction.GAME_OBJECT_FIRST_OPTION,
+			MenuAction.GAME_OBJECT_SECOND_OPTION,
+			MenuAction.GAME_OBJECT_THIRD_OPTION,
+			MenuAction.GAME_OBJECT_FOURTH_OPTION,
+			MenuAction.GAME_OBJECT_FIFTH_OPTION
+	);
+
+	static
+	{
+		ALWAYS_ALLOW_OBJECT_IDS.add(net.runelite.api.gameval.ObjectID.CATABOW);
+	}
+
 	private static final int ORBS_GROUP = (InterfaceID.Orbs.UNIVERSE >>> 16);
 
 	/**
@@ -220,7 +235,13 @@ public class ActionHandler {
 			return true;
 		}
 
-		// Always allow "Drop"
+		// Allowlisted world objects bypass all restrictions
+		if (GAME_OBJECT_ACTIONS.contains(action) && ALWAYS_ALLOW_OBJECT_IDS.contains(entry.getIdentifier()))
+		{
+			return true;
+		}
+
+		// Always allow "Drop" / "Check"
 		if (option.equalsIgnoreCase("drop") || option.equalsIgnoreCase("check"))
 			return true;
 		if (option.equalsIgnoreCase("clean") || option.equalsIgnoreCase("rub"))
@@ -229,9 +250,12 @@ public class ActionHandler {
 			return unlockedItemsManager.isUnlocked(id);
 		}
 		if ("harpoon".equalsIgnoreCase(option)
-				&& target.toLowerCase().contains("fishing spot")
 				&& !hasAnyHarpoonInInvOrWorn())
-			return true; // barehanded barbarian fishing
+		{
+			String t = target.toLowerCase();
+			if (t.contains("fishing spot") || t.contains("spirit pool"))
+				return true;
+		}
 		if (SkillOp.isSkillOp(option))
 			return restrictions.isSkillOpEnabled(option);
 		if (Spell.isSpell(option))
@@ -273,7 +297,7 @@ public class ActionHandler {
 	 **/
 	private boolean hasAnyHarpoonInInvOrWorn()
 	{
-		ItemContainer worn = client.getItemContainer(net.runelite.api.gameval.InventoryID.WORN);
+		ItemContainer worn = client.getItemContainer(InventoryID.WORN);
 		ItemContainer inv  = client.getItemContainer(InventoryID.INV);
 
 		if (worn != null)
