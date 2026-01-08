@@ -1,6 +1,6 @@
 package com.chanceman.ui;
 
-import com.chanceman.managers.UnlockedItemsManager;
+import com.chanceman.managers.RolledItemsManager;
 import com.chanceman.filters.EnsouledHeadMapping;
 import com.chanceman.menus.EnabledUI;
 import lombok.RequiredArgsConstructor;
@@ -29,7 +29,7 @@ import java.util.concurrent.ConcurrentHashMap;
 @RequiredArgsConstructor(onConstructor_ = @Inject)
 public class ItemDimmerController {
     private final Client client;
-    private final UnlockedItemsManager unlockedItemsManager;
+    private final RolledItemsManager rolledItemsManager;
     private final ItemManager itemManager;
 
     // Cache (long-lived) for tradeable-by-canonical-id
@@ -124,7 +124,7 @@ public class ItemDimmerController {
         final int canonicalItemId = canonicalize(mappedItemId);
         if (canonicalItemId <= 0) return false;
         if (!isTradeableCanonical(canonicalItemId)) return false;
-        return !isUnlocked(mappedItemId, canonicalItemId);
+        return !isRolled(mappedItemId, canonicalItemId);
     }
 
     private int canonicalize(int rawItemId) {
@@ -136,13 +136,13 @@ public class ItemDimmerController {
         }
     }
 
-    private boolean isUnlocked(int normalizedItemId, int canonicalItemId) {
-        if (unlockedItemsManager == null) return true; // fail open if manager missing
+    private boolean isRolled(int normalizedItemId, int canonicalItemId) {
+        if (rolledItemsManager  == null) return true; // fail open if manager missing
 
         try {
-            // Fast paths: raw or canonical known unlocked
-            if (normalizedItemId > 0 && unlockedItemsManager.isUnlocked(normalizedItemId)) return true;
-            if (canonicalItemId > 0 && normalizedItemId != canonicalItemId && unlockedItemsManager.isUnlocked(canonicalItemId))
+            // Fast paths: raw or canonical known obtained
+            if (normalizedItemId > 0 && rolledItemsManager.isRolled(normalizedItemId)) return true;
+            if (canonicalItemId > 0 && normalizedItemId != canonicalItemId && obtainedItemSubCheck(canonicalItemId))
                 return true;
 
             // Slower path: related ids (placeholders / noted variants)
@@ -156,7 +156,7 @@ public class ItemDimmerController {
             }
 
             for (int id : candidates) {
-                if (id > 0 && unlockedItemsManager.isUnlocked(id)) {
+                if (id > 0 && obtainedItemSubCheck(id)) {
                     return true;
                 }
             }
@@ -165,6 +165,14 @@ public class ItemDimmerController {
         }
 
         return false;
+    }
+
+    private boolean obtainedItemSubCheck(int itemId) {
+        try {
+            return rolledItemsManager.isRolled(itemId);
+        } catch (Exception e) {
+            return true; // fail open if manager misbehaves
+        }
     }
 
     private void collectRelatedIds(int itemId, Set<Integer> sink) {

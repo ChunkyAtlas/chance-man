@@ -76,8 +76,8 @@ public interface ChanceManConfig extends Config
 
     @ConfigItem(
             keyName = "requireRolledUnlockedForGe",
-            name = "GE Requires Rolled and Unlocked",
-            description = "Only allow Grand Exchange purchases once items are both rolled and unlocked.",
+            name = "GE Requires Obtained and Rolled",
+            description = "Only Allow Grand Exchange results for items that have been both obtained and rolled.",
             position = 8
     )
     default boolean requireRolledUnlockedForGe() { return true; }

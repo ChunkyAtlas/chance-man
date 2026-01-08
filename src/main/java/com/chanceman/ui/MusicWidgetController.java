@@ -3,7 +3,7 @@ package com.chanceman.ui;
 import com.chanceman.ChanceManConfig;
 import com.chanceman.drops.DropItem;
 import com.chanceman.drops.NpcDropData;
-import com.chanceman.managers.RolledItemsManager;
+import com.chanceman.managers.ObtainedItemsManager;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -40,7 +40,7 @@ public class MusicWidgetController
 
     private final Client client;
     private final ClientThread clientThread;
-    private final RolledItemsManager rolledItemsManager;
+    private final ObtainedItemsManager obtainedItemsManager;
     private final SpriteOverrideManager spriteOverrideManager;
     private final ItemSpriteCache itemSpriteCache;
     private final ChanceManConfig config;
@@ -60,13 +60,13 @@ public class MusicWidgetController
     @Getter private final Map<Widget, DropItem> iconItemMap = new LinkedHashMap<>();
     @Getter private boolean overrideActive = false;
     @Inject private MusicSearchButton musicSearchButton;
-    private boolean hideRolledItems = false;
+    private boolean hideObtainedItems = false;
 
     @Inject
     public MusicWidgetController(
             Client client,
             ClientThread clientThread,
-            RolledItemsManager rolledItemsManager,
+            ObtainedItemsManager obtainedItemsManager,
             SpriteOverrideManager spriteOverrideManager,
             ItemSpriteCache itemSpriteCache,
             ChanceManConfig config,
@@ -74,7 +74,7 @@ public class MusicWidgetController
     {
         this.client = client;
         this.clientThread = clientThread;
-        this.rolledItemsManager = rolledItemsManager;
+        this.obtainedItemsManager = obtainedItemsManager;
         this.spriteOverrideManager = spriteOverrideManager;
         this.itemSpriteCache = itemSpriteCache;
         this.config = config;
@@ -102,7 +102,7 @@ public class MusicWidgetController
             return;
         }
         currentDrops = dropData;
-        hideRolledItems = false;
+        hideObtainedItems = false;
         musicSearchButton.onOverrideActivated();
         if (!overrideActive)
         {
@@ -130,13 +130,13 @@ public class MusicWidgetController
         }
         spriteOverrideManager.unregister();
         itemSpriteCache.clear();
-        hideRolledItems = false;
+        hideObtainedItems = false;
         clientThread.invokeLater(this::revertOverride);
     }
 
     private void updateIconsVisibilityAndLayout()
     {
-        Set<Integer> rolledIds = rolledItemsManager.getRolledItems();
+        Set<Integer> obtainedIds = obtainedItemsManager.getObtainedItems();
         Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
         Widget scrollbar = client.getWidget(MUSIC_GROUP, 7);
 
@@ -146,9 +146,9 @@ public class MusicWidgetController
         {
             Widget icon = e.getKey();
             DropItem d = e.getValue();
-            boolean rolled = rolledIds.contains(d.getItemId());
+            boolean obtained = obtainedIds.contains(d.getItemId());
 
-            if (hideRolledItems && rolled)
+            if (hideObtainedItems && obtained)
             {
                 icon.setHidden(true);
             }
@@ -261,7 +261,7 @@ public class MusicWidgetController
         return title;
     }
 
-    private void drawProgressBarAndToggle(Widget root, Widget title, NpcDropData dropData, int rolledCount, int totalDrops)
+    private void drawProgressBarAndToggle(Widget root, Widget title, NpcDropData dropData, int obtainedCount, int totalDrops)
     {
         int fontId = title != null ? title.getFontId() : 0;
         boolean shadowed = title != null && title.getTextShadowed();
@@ -328,7 +328,9 @@ public class MusicWidgetController
 
         final int border = 1;
         int innerWidth = newW - border * 2;
-        int fillW = Math.round(innerWidth * (float) rolledCount / totalDrops);
+        int fillW = (totalDrops <= 0)
+                ? 0
+                : Math.round(innerWidth * (float) obtainedCount / totalDrops);
 
         Widget fill = root.createChild(-1);
         fill.setHidden(false);
@@ -342,7 +344,7 @@ public class MusicWidgetController
         fill.revalidate();
         overrideRootWidgets.add(fill);
 
-        String txt = String.format("%d/%d", rolledCount, totalDrops);
+        String txt = String.format("%d/%d", obtainedCount, totalDrops);
         Widget label = root.createChild(-1);
         label.setHidden(false);
         label.setType(WidgetType.TEXT);
@@ -367,16 +369,16 @@ public class MusicWidgetController
         eye.setOriginalY(eyeY);
         eye.setOriginalWidth(EYE_SIZE);
         eye.setOriginalHeight(EYE_SIZE);
-        eye.setSpriteId(hideRolledItems ? 2222 : 2221);
+        eye.setSpriteId(hideObtainedItems ? 2222 : 2221);
         eye.revalidate();
-        eye.setAction(0, "Toggle rolled items");
+        eye.setAction(0, "Toggle obtained items");
 
         overrideRootWidgets.add(eye);
         eye.setOnOpListener((JavaScriptCallback) (ScriptEvent ev) ->
         {
-            hideRolledItems = !hideRolledItems;
+            hideObtainedItems = !hideObtainedItems;
             updateIconsVisibilityAndLayout();
-            eye.setSpriteId(hideRolledItems ? 2222 : 2221);
+            eye.setSpriteId(hideObtainedItems ? 2222 : 2221);
             eye.revalidate();
         });
         eye.setHasListener(true);
@@ -465,7 +467,7 @@ public class MusicWidgetController
         showSearchDialog();
     }
 
-    private void drawDropIcons(Widget scrollable, Widget scrollbar, Widget jukebox, List<DropItem> drops, Set<Integer> rolledIds)
+    private void drawDropIcons(Widget scrollable, Widget scrollbar, Widget jukebox, List<DropItem> drops, Set<Integer> obtainedIds)
     {
         if (scrollable == null || scrollbar == null)
         {
@@ -505,7 +507,7 @@ public class MusicWidgetController
             icon.setOriginalY(MARGIN_Y);
             icon.setOriginalWidth(ICON_SIZE);
             icon.setOriginalHeight(ICON_SIZE);
-            icon.setOpacity(rolledIds.contains(itemId) ? 0 : 150);
+            icon.setOpacity(obtainedIds.contains(itemId) ? 0 : 150);
             icon.revalidate();
 
             iconItemMap.put(icon, d);
@@ -568,10 +570,10 @@ public class MusicWidgetController
                 .collect(Collectors.toList());
         drops = WidgetUtils.dedupeAndSort(drops, config.sortDropsByRarity());
 
-        Set<Integer> rolledIds = rolledItemsManager.getRolledItems();
+        Set<Integer> obtainedIds = obtainedItemsManager.getObtainedItems();
         int totalDrops = drops.size();
-        int rolledCount = (int) drops.stream()
-                .filter(d -> rolledIds.contains(d.getItemId()))
+        int obtainedCount = (int) drops.stream()
+                .filter(d -> obtainedIds.contains(d.getItemId()))
                 .count();
 
         Widget title = updateTitle(dropData);
@@ -586,14 +588,14 @@ public class MusicWidgetController
             root.setType(WidgetType.LAYER);
             WidgetUtils.hideAllChildrenSafely(root);
 
-            drawProgressBarAndToggle(root, title, dropData, rolledCount, totalDrops);
+            drawProgressBarAndToggle(root, title, dropData, obtainedCount, totalDrops);
         }
 
         Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
         Widget jukebox = client.getWidget(MUSIC_GROUP, 6);
         Widget scrollbar = client.getWidget(MUSIC_GROUP, 7);
 
-        drawDropIcons(scrollable, scrollbar, jukebox, drops, rolledIds);
+        drawDropIcons(scrollable, scrollbar, jukebox, drops, obtainedIds);
 
         if (root != null)
         {

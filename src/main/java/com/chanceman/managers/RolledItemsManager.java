@@ -25,32 +25,43 @@ import static net.runelite.client.RuneLite.RUNELITE_DIR;
 public class RolledItemsManager
 {
     private static final int MAX_BACKUPS = 10;
-    private static final String CFG_KEY = "rolled";
+    private static final String CFG_KEY = "unlocked";
+    private static final String FILE_NAME = "chanceman_rolled.json";
+    private static final String OBTAINED_FILE_NAME = "chanceman_obtained.json";
+    private static final String LEGACY_FILE_NAME = "chanceman_unlocked.json";
+
     private static final String BACKUP_TS_PATTERN = "yyyyMMddHHmmss";
     private static final long CONFIG_DEBOUNCE_MS = 3000L;
     private static final long SELF_WRITE_GRACE_MS = 1500L;
     private static final long FS_DEBOUNCE_MS = 200L;
-    private static final String FILE_NAME = "chanceman_rolled.json";
+
     private static final Type SET_TYPE = new TypeToken<Set<Integer>>(){}.getType();
     private final Set<Integer> rolledItems = Collections.synchronizedSet(new LinkedHashSet<>());
+
     @Inject private AccountManager accountManager;
     @Inject private Gson gson;
     @Inject private ConfigPersistence configPersistence;
+
     @Setter private ExecutorService executor; // file writes & cloud mirror
     @Setter private Runnable onChange; // optional UI refresh
+
     private volatile long lastConfigWriteMs = 0L;
     private volatile boolean configWriteWarned = false;
     private volatile boolean dirty = false;
+
     private WatchService watchService;
     private volatile boolean watcherRunning = false;
     private volatile long lastSelfWriteMs = 0L;
     private Thread watcherThread;
+    public boolean ready() { return accountManager.getPlayerName() != null; }
 
     public boolean isRolled(int itemId) { return rolledItems.contains(itemId); }
 
     /** Return an immutable snapshot to avoid leaking the synchronizedSet. */
-    public Set<Integer> getRolledItems() {
-        synchronized (rolledItems) {
+    public Set<Integer> getRolledItems()
+    {
+        synchronized (rolledItems)
+        {
             return Collections.unmodifiableSet(new LinkedHashSet<>(rolledItems));
         }
     }
@@ -82,7 +93,7 @@ public class RolledItemsManager
     public void startWatching()
     {
         if (watcherRunning) return;
-        Path file = safeGetFilePathOrNull();
+        Path file = safeGetFilePathOrNull(FILE_NAME);
         if (file == null) return;
 
         try
@@ -104,7 +115,6 @@ public class RolledItemsManager
 
         watcherRunning = true;
         final String target = file.getFileName().toString();
-
         watcherThread = new Thread(() -> runWatcherLoop(target), "ChanceMan-Rolled-Watcher");
         watcherThread.setDaemon(true);
         watcherThread.start();
@@ -123,7 +133,7 @@ public class RolledItemsManager
     public void flushIfDirtyOnExit()
     {
         if (!dirty) return;
-        Path file = safeGetFilePathOrNull();
+        Path file = safeGetFilePathOrNull(FILE_NAME);
         if (file == null) return;
 
         try
@@ -148,29 +158,44 @@ public class RolledItemsManager
     {
         String player = accountManager.getPlayerName();
         if (player == null) return;
+        migrateLegacyObtainedFileIfNeeded();
+        Path newFile = safeGetFilePathOrNull(FILE_NAME);
+        if (newFile == null) return;
 
-        Path file = safeGetFilePathOrNull();
-        if (file == null) return;
+        boolean newFileExisted = Files.exists(newFile);
 
-        boolean fileExisted = Files.exists(file);
+        // Read local new first; if missing, seed from legacy unlocked file
+        Path legacyFile = safeGetFilePathOrNull(LEGACY_FILE_NAME);
 
-        Set<Integer> local = readLocalJson(file);
-        long localMtime = fileExisted ? safeLastModified(file) : 0L;
+        Set<Integer> localNew = readLocalJson(newFile);
+        Set<Integer> local;
+        if (!localNew.isEmpty() || newFileExisted)
+        {
+            local = localNew;
+        }
+        else
+        {
+            local = (legacyFile != null) ? readLocalJson(legacyFile) : new LinkedHashSet<>();
+        }
 
-        ConfigPersistence.StampedSet cloudStamped = readCloud(player);
+        long localMtime = newFileExisted ? safeLastModified(newFile) : 0L;
+
+        // Cloud
+        ConfigPersistence.StampedSet cloudStamped = readCloud(player, CFG_KEY);
         Set<Integer> cloud = new LinkedHashSet<>(cloudStamped.data);
         long cloudTs = cloudStamped.ts;
 
-        // LWW
+        // LWW between local and cloud
         Set<Integer> winner;
         Long winnerStamp = null;
         boolean needPersist;
 
-        if (localMtime > cloudTs) { winner = local;  winnerStamp = localMtime; needPersist = true; } // push to cloud
-        else if (cloudTs > localMtime) { winner = cloud;  winnerStamp = cloudTs;    needPersist = true; } // pull to disk
-        else { winner = local;  needPersist = !fileExisted; } // create disk if missing
+        if (localMtime > cloudTs) { winner = local; winnerStamp = localMtime; needPersist = true; }
+        else if (cloudTs > localMtime) { winner = cloud; winnerStamp = cloudTs; needPersist = true; }
+        else { winner = local; needPersist = !newFileExisted; }
 
-        synchronized (rolledItems) {
+        synchronized (rolledItems)
+        {
             rolledItems.clear();
             rolledItems.addAll(winner);
         }
@@ -180,7 +205,60 @@ public class RolledItemsManager
             long stamp = (winnerStamp != null) ? winnerStamp : System.currentTimeMillis();
             saveInternal(stamp, false); // bypass debounce during reconcile
         }
+
         dirty = false;
+    }
+
+    private void migrateLegacyObtainedFileIfNeeded()
+    {
+        Path legacyUnlocked = safeGetFilePathOrNull(LEGACY_FILE_NAME);
+        if (legacyUnlocked == null) return;
+
+        // Legacy marker: if this doesn't exist, it's a new-ish player and we should do nothing.
+        if (!Files.exists(legacyUnlocked)) return;
+
+        Path obtainedFile = safeGetFilePathOrNull(OBTAINED_FILE_NAME);
+        Path legacyObtainedFile = safeGetFilePathOrNull("chanceman_rolled.json");
+        if (obtainedFile == null || legacyObtainedFile == null) return;
+
+        // If obtained already exists, migration is done
+        if (Files.exists(obtainedFile)) return;
+
+        // If legacy obtained doesn't exist, nothing to migrate.
+        if (!Files.exists(legacyObtainedFile)) return;
+
+        try
+        {
+            // Only migrate if legacy obtained actually has data; if it's empty, don't bother.
+            Set<Integer> legacyData = readLocalJson(legacyObtainedFile);
+            if (legacyData.isEmpty())
+            {
+                return;
+            }
+
+            // Ensure directory exists
+            Files.createDirectories(obtainedFile.getParent());
+
+            // Move legacy file into the new obtained file name
+            try
+            {
+                Files.move(legacyObtainedFile, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
+            }
+            catch (IOException moveFail)
+            {
+                // Fallback: copy + delete
+                Files.copy(legacyObtainedFile, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
+                Files.deleteIfExists(legacyObtainedFile);
+            }
+
+            log.info("ChanceMan v3 migration: moved legacy obtained file {} -> {}",
+                    legacyObtainedFile.getFileName(), obtainedFile.getFileName());
+        }
+        catch (Exception e)
+        {
+            log.error("ChanceMan v3 migration: failed to migrate legacy obtained rolled.json -> obtained.json; refusing to proceed", e);
+            throw new RuntimeException(e);
+        }
     }
 
     /** Disk write + cloud mirror (debounced or immediate). */
@@ -192,8 +270,9 @@ public class RolledItemsManager
             return;
         }
 
-        executor.submit(() -> {
-            Path file = safeGetFilePathOrNull();
+        executor.submit(() ->
+        {
+            Path file = safeGetFilePathOrNull(FILE_NAME);
             if (file == null)
             {
                 log.error("RolledItemsManager: file path unavailable; skipping save");
@@ -224,11 +303,12 @@ public class RolledItemsManager
         String player = accountManager.getPlayerName();
         if (player == null || player.isEmpty() || executor == null) return;
 
-        Set<Integer> snap = (snapshot != null) ? snapshot : snapshotRolled();
-        executor.submit(() -> {
+        final Set<Integer> snap = (snapshot != null) ? snapshot : snapshotRolled();
+
+        executor.submit(() ->
+        {
             try
             {
-                // Guard against out-of-order writes across machines/threads
                 configPersistence.writeStampedSetIfNewer(player, CFG_KEY, snap, stampMillis);
             }
             catch (Exception e)
@@ -245,9 +325,9 @@ public class RolledItemsManager
     private boolean isExecutorAvailable()
     {
         if (executor == null) return false;
-        if (executor instanceof java.util.concurrent.ThreadPoolExecutor) {
-            java.util.concurrent.ThreadPoolExecutor tpe =
-                    (java.util.concurrent.ThreadPoolExecutor) executor;
+        if (executor instanceof java.util.concurrent.ThreadPoolExecutor)
+        {
+            java.util.concurrent.ThreadPoolExecutor tpe = (java.util.concurrent.ThreadPoolExecutor) executor;
             return !tpe.isShutdown() && !tpe.isTerminated();
         }
         return true;
@@ -256,21 +336,26 @@ public class RolledItemsManager
     private void safeNotifyChange()
     {
         Runnable cb = onChange;
-        if (cb != null) { try { cb.run(); } catch (Throwable t) { log.error("onChange threw", t); } }
+        if (cb != null)
+        {
+            try { cb.run(); }
+            catch (Throwable t) { log.error("onChange threw", t); }
+        }
     }
 
-    private Path getFilePath() throws IOException
+    private Path getFilePath(String fileName) throws IOException
     {
         String name = accountManager.getPlayerName();
         if (name == null) throw new IOException("Player name is null");
         Path dir = RUNELITE_DIR.toPath().resolve("chanceman").resolve(name);
         Files.createDirectories(dir);
-        return dir.resolve(FILE_NAME);
+        return dir.resolve(fileName);
     }
 
-    private Path safeGetFilePathOrNull()
+    private Path safeGetFilePathOrNull(String fileName)
     {
-        try { return getFilePath(); } catch (IOException ioe) { return null; }
+        try { return getFilePath(fileName); }
+        catch (IOException ioe) { return null; }
     }
 
     /** Windows-safe: COPY current file to a timestamped backup with small retries; then prune. */
@@ -297,9 +382,10 @@ public class RolledItemsManager
                 if (attempt >= maxAttempts)
                 {
                     log.error("Backup copy failed after {} attempts for {}", attempt, file, fse);
-                    break; // give up on backup, continue save
+                    break;
                 }
-                try { Thread.sleep(50L * attempt); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
+                try { Thread.sleep(50L * attempt); }
+                catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
             }
         }
 
@@ -322,15 +408,29 @@ public class RolledItemsManager
         lastSelfWriteMs = System.currentTimeMillis();
     }
 
+    /** Move with fallback when ATOMIC_MOVE not supported. */
+    private void safeMove(Path source, Path target, CopyOption... opts) throws IOException
+    {
+        try { Files.move(source, target, opts); }
+        catch (AtomicMoveNotSupportedException | AccessDeniedException ex)
+        {
+            Set<CopyOption> fallback = new HashSet<>(Arrays.asList(opts));
+            fallback.remove(StandardCopyOption.ATOMIC_MOVE);
+            fallback.add(StandardCopyOption.REPLACE_EXISTING);
+            Files.move(source, target, fallback.toArray(new CopyOption[0]));
+        }
+    }
+
     private long safeLastModified(Path file)
     {
-        try { return Files.getLastModifiedTime(file).toMillis(); } catch (IOException e) { return 0L; }
+        try { return Files.getLastModifiedTime(file).toMillis(); }
+        catch (IOException e) { return 0L; }
     }
 
     private Set<Integer> readLocalJson(Path file)
     {
         Set<Integer> local = new LinkedHashSet<>();
-        if (!Files.exists(file)) return local;
+        if (file == null || !Files.exists(file)) return local;
         try (Reader r = Files.newBufferedReader(file))
         {
             Set<Integer> loaded = gson.fromJson(r, SET_TYPE);
@@ -343,15 +443,16 @@ public class RolledItemsManager
         return local;
     }
 
-    private ConfigPersistence.StampedSet readCloud(String player)
+    private ConfigPersistence.StampedSet readCloud(String player, String key)
     {
-        try { return configPersistence.readStampedSet(player, CFG_KEY); }
+        try { return configPersistence.readStampedSet(player, key); }
         catch (Exception e) { return new ConfigPersistence.StampedSet(new LinkedHashSet<>(), 0L); }
     }
 
     private void closeWatchServiceQuietly()
     {
-        try { if (watchService != null) watchService.close(); } catch (IOException ignored) {}
+        try { if (watchService != null) watchService.close(); }
+        catch (IOException ignored) {}
         watchService = null;
     }
 
@@ -375,7 +476,7 @@ public class RolledItemsManager
                         relevant = true;
                     }
                 }
-                if (!key.reset()) break; // exit if key becomes invalid
+                if (!key.reset()) break;
                 if (!relevant) continue;
 
                 long now = System.currentTimeMillis();
@@ -401,22 +502,11 @@ public class RolledItemsManager
         }
     }
 
-    /** Move with fallback when ATOMIC_MOVE not supported. */
-    private void safeMove(Path source, Path target, CopyOption... opts) throws IOException
-    {
-        try { Files.move(source, target, opts); }
-        catch (AtomicMoveNotSupportedException | AccessDeniedException ex)
-        {
-            Set<CopyOption> fallback = new HashSet<>(Arrays.asList(opts));
-            fallback.remove(StandardCopyOption.ATOMIC_MOVE);
-            fallback.add(StandardCopyOption.REPLACE_EXISTING);
-            Files.move(source, target, fallback.toArray(new CopyOption[0]));
-        }
-    }
-
     /** Take a consistent snapshot under the set's monitor. */
-    private Set<Integer> snapshotRolled() {
-        synchronized (rolledItems) {
+    private Set<Integer> snapshotRolled()
+    {
+        synchronized (rolledItems)
+        {
             return new LinkedHashSet<>(rolledItems);
         }
     }

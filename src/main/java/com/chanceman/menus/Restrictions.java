@@ -1,7 +1,8 @@
 package com.chanceman.menus;
 
 import com.chanceman.ChanceManPlugin;
-import com.chanceman.managers.UnlockedItemsManager;
+import com.chanceman.managers.RolledItemsManager;
+import com.chanceman.account.AccountManager;
 import net.runelite.api.*;
 import net.runelite.api.coords.WorldArea;
 import net.runelite.api.coords.WorldPoint;
@@ -58,14 +59,15 @@ public class Restrictions
 
 	@Inject private ChanceManPlugin plugin;
 	@Inject private Client client;
-	@Inject private UnlockedItemsManager unlockedItemsManager;
+	@Inject private RolledItemsManager rolledItemsManager;
+	@Inject private AccountManager accountManager;
 	private final Set<SkillOp> enabledSkillOps = EnumSet.noneOf(SkillOp.class);
 	private final HashSet<Integer> availableRunes = new HashSet<>();
 
 	@Subscribe
 	public void onGameTick(GameTick event)
 	{
-		if (!unlockedItemsManager.ready()) return;
+		if (!accountManager.ready()) return;
 		enabledSkillOps.clear();
 		availableRunes.clear();
 
@@ -144,7 +146,7 @@ public class Restrictions
 			return !(RuneProvider.isEquippedProvider(id)
 					|| RuneProvider.isInvProvider(id));
 		}
-		return !unlockedItemsManager.isUnlocked(id);
+		return !rolledItemsManager.isRolled(id);
 	}
 
 	public boolean isSpellOpEnabled(String spellName)
@@ -155,7 +157,7 @@ public class Restrictions
 		{
 			int sackId = sack.getSackItemId();
 			ItemContainer inv = client.getItemContainer(InventoryID.INV);
-			if (inv != null	&& (sackId == ItemID.BLIGHTED_SACK_SURGE || unlockedItemsManager.isUnlocked(sackId)))
+			if (inv != null	&& (sackId == ItemID.BLIGHTED_SACK_SURGE || rolledItemsManager.isRolled(sackId)))
 			{
 				for (Item item : inv.getItems())
 				{

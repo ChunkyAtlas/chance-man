@@ -3,7 +3,7 @@ package com.chanceman.menus;
 import com.chanceman.ChanceManConfig;
 import com.chanceman.ChanceManPlugin;
 import com.chanceman.filters.EnsouledHeadMapping;
-import com.chanceman.managers.UnlockedItemsManager;
+import com.chanceman.managers.RolledItemsManager;
 import lombok.Getter;
 import lombok.Setter;
 import net.runelite.api.GameState;
@@ -32,7 +32,6 @@ import java.util.function.Consumer;
 
 @Singleton
 public class ActionHandler {
-
 
 	private static final Set<MenuAction> disabledActions = EnumSet.of(
 			MenuAction.CC_OP,               // inventory “Use” on locked
@@ -89,14 +88,14 @@ public class ActionHandler {
 	private Client client;
 	@Inject
 	private EventBus eventBus;
-    @Inject
-    private ChanceManConfig config;
+	@Inject
+	private ChanceManConfig config;
 	@Inject
 	private ChanceManPlugin plugin;
 	@Inject
 	private Restrictions restrictions;
 	@Inject
-	private UnlockedItemsManager unlockedItemsManager;
+	private RolledItemsManager rolledItemsManager;
 	@Getter
 	@Setter
 	private int enabledUIOpen = -1;
@@ -124,7 +123,7 @@ public class ActionHandler {
 	}
 
 	private boolean inactive() {
-		if (!unlockedItemsManager.ready()) return true;
+		if (!rolledItemsManager.ready()) return true;
 		return client.getGameState().getState() < GameState.LOADING.getState();
 	}
 
@@ -166,9 +165,9 @@ public class ActionHandler {
 			entry.setOption("<col=808080>" + option);
 			entry.setTarget("<col=808080>" + target);
 			entry.onClick(DISABLED);
-            if (config.deprioritizeLockedOptions()) {
-                entry.setDeprioritized(true);
-            }
+			if (config.deprioritizeLockedOptions()) {
+				entry.setDeprioritized(true);
+			}
 		}
 	}
 
@@ -180,7 +179,7 @@ public class ActionHandler {
 			return;
 		}
 		// Extra safeguard for ground items.
-		handleGroundItems(plugin.getItemManager(), unlockedItemsManager, event, plugin);
+		handleGroundItems(plugin.getItemManager(), rolledItemsManager, event, plugin);
 	}
 
 	/**
@@ -199,7 +198,7 @@ public class ActionHandler {
 	{
 		return plugin.isTradeable(itemId)
 				&& !plugin.isNotTracked(itemId)
-				&& !unlockedItemsManager.isUnlocked(itemId);
+				&& !rolledItemsManager.isRolled(itemId);
 	}
 
 	private boolean isHealthOrbCure(MenuEntry entry)
@@ -247,7 +246,7 @@ public class ActionHandler {
 		if (option.equalsIgnoreCase("clean") || option.equalsIgnoreCase("rub"))
 		{
 			if (!plugin.isInPlay(id)) { return true; }
-			return unlockedItemsManager.isUnlocked(id);
+			return rolledItemsManager.isRolled(id);
 		}
 		if ("harpoon".equalsIgnoreCase(option)
 				&& !hasAnyHarpoonInInvOrWorn())
@@ -268,14 +267,14 @@ public class ActionHandler {
 			return true;
 		if (id == 0 || id == -1 || !plugin.isInPlay(id))
 			return true;
-		return unlockedItemsManager.isUnlocked(id);
+		return rolledItemsManager.isRolled(id);
 	}
 
 	/**
 	 * A static helper to further safeguard ground item actions.
 	 * If a ground item is locked, this method consumes the event.
 	 */
-	public static void handleGroundItems(ItemManager itemManager, UnlockedItemsManager unlockedItemsManager,
+	public static void handleGroundItems(ItemManager itemManager, RolledItemsManager rolledItemsManager,
 										 MenuOptionClicked event, ChanceManPlugin plugin) {
 		if (event.getMenuAction() != null && GROUND_ACTIONS.contains(event.getMenuAction())) {
 			int rawItemId = event.getId() != -1
@@ -285,12 +284,13 @@ public class ActionHandler {
 			int canonicalGroundId = itemManager.canonicalize(mapped);
 			if (plugin.isTradeable(canonicalGroundId)
 					&& !plugin.isNotTracked(canonicalGroundId)
-					&& unlockedItemsManager != null
-					&& !unlockedItemsManager.isUnlocked(canonicalGroundId)) {
+					&& rolledItemsManager != null
+					&& !rolledItemsManager.isRolled(canonicalGroundId)) {
 				event.consume();
 			}
 		}
 	}
+
 	/**
 	 Checks for harpoon in inventory and worn items for
 	 barbarian fishing.
