@@ -76,54 +76,62 @@ public class RollAnimationManager
      */
     private void performRoll(int queuedItemId)
     {
-        // Duration of the continuous spin phase (ms)
-        int rollDuration = 3000;
-        overlay.startRollAnimation(0, rollDuration, this::getRandomLockedItem);
-
-        try {
-            Thread.sleep(rollDuration + SNAP_WINDOW_MS);
-        }
-        catch (InterruptedException e)
+        try
         {
-            Thread.currentThread().interrupt();
-        }
-        int finalRolledItem = overlay.getFinalItem();
-        unlockedManager.unlockItem(finalRolledItem);
-        final boolean wasManualRoll = isManualRoll();
-        clientThread.invoke(() -> {
-            String unlockedTag = ColorUtil.wrapWithColorTag(getItemName(finalRolledItem), config.unlockedItemColor());
-            String message;
-            if (wasManualRoll)
-            {
-                String pressTag = ColorUtil.wrapWithColorTag("pressing a button", config.rolledItemColor());
-                message = "Unlocked " + unlockedTag + " by " + pressTag;
-            }
-            else
-            {
-                String rolledTag = ColorUtil.wrapWithColorTag(getItemName(queuedItemId), config.rolledItemColor());
-                message = "Unlocked " + unlockedTag + " by rolling " + rolledTag;
-            }
-            client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null);
-            if (chanceManPanel != null) {
-                SwingUtilities.invokeLater(() -> chanceManPanel.updatePanel());
-            }
-        });
+            // Duration of the continuous spin phase (ms)
+            int rollDuration = 3000;
+            overlay.startRollAnimation(0, rollDuration, this::getRandomLockedItem);
 
-        int remainingHighlight = Math.max(0, overlay.getHighlightDurationMs() - SNAP_WINDOW_MS);
-        if (remainingHighlight > 0)
-        {
             try
             {
-                Thread.sleep(remainingHighlight);
+                Thread.sleep(rollDuration + SNAP_WINDOW_MS);
             }
             catch (InterruptedException e)
             {
                 Thread.currentThread().interrupt();
             }
-        }
 
-        setManualRoll(false);
-        isRolling = false;
+            int finalRolledItem = overlay.getFinalItem();
+            unlockedManager.unlockItem(finalRolledItem);
+
+            final boolean wasManualRoll = isManualRoll();
+            clientThread.invoke(() -> {
+                String unlockedTag = ColorUtil.wrapWithColorTag(getItemName(finalRolledItem), config.unlockedItemColor());
+                String message;
+                if (wasManualRoll)
+                {
+                    String pressTag = ColorUtil.wrapWithColorTag("pressing a button", config.rolledItemColor());
+                    message = "Unlocked " + unlockedTag + " by " + pressTag;
+                }
+                else
+                {
+                    String rolledTag = ColorUtil.wrapWithColorTag(getItemName(queuedItemId), config.rolledItemColor());
+                    message = "Unlocked " + unlockedTag + " by rolling " + rolledTag;
+                }
+                client.addChatMessage(ChatMessageType.GAMEMESSAGE, "", message, null);
+                if (chanceManPanel != null) {
+                    SwingUtilities.invokeLater(() -> chanceManPanel.updatePanel());
+                }
+            });
+
+            int remainingHighlight = Math.max(0, overlay.getHighlightDurationMs() - SNAP_WINDOW_MS);
+            if (remainingHighlight > 0)
+            {
+                try
+                {
+                    Thread.sleep(remainingHighlight);
+                }
+                catch (InterruptedException e)
+                {
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        finally
+        {
+            setManualRoll(false);
+            isRolling = false;
+        }
     }
 
     /**

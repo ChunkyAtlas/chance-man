@@ -30,6 +30,7 @@ import java.util.function.Supplier;
  *   <li>{@link #startRollAnimation(int, int, Supplier)} primes the strip and starts the spin timer.</li>
  *   <li>{@link #render(Graphics2D)} scrolls items, snaps to a slot near the end, then highlights the winner.</li>
  *   <li>{@link #getFinalItem()} returns the centered item after snap/highlight.</li>
+ * </ol>
  */
 @Singleton
 @Slf4j
@@ -126,12 +127,20 @@ public class ChanceManOverlay extends Overlay {
      */
     public void startRollAnimation(int dummy, int rollDurationMs, Supplier<Integer> randomLockedItemSupplier) {
         if (config.enableRollSounds()) {
-            try {
-                float volumeDb = toDb(config.rollSoundVolume());
-                audioPlayer.play( ChanceManOverlay.class,"/com/chanceman/tick.wav", volumeDb);
-            } catch (IOException | UnsupportedAudioFileException | LineUnavailableException ex) {
-                log.warn("ChanceMan: failed to play tick.wav", ex);
-            }
+            Thread t = new Thread(() -> {
+                try {
+                    float volumeDb = toDb(config.rollSoundVolume());
+                    audioPlayer.play(ChanceManOverlay.class, "/com/chanceman/tick.wav", volumeDb);
+                }
+                catch (IOException | UnsupportedAudioFileException | LineUnavailableException ex) {
+                    log.warn("ChanceMan: failed to play tick.wav", ex);
+                }
+                catch (Throwable t1) {
+                    log.warn("ChanceMan: unexpected error while playing tick.wav", t1);
+                }
+            }, "ChanceMan-Audio");
+            t.setDaemon(true);
+            t.start();
         }
 
         this.rollDurationMs = rollDurationMs;
