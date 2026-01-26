@@ -310,6 +310,17 @@ public final class BlockedItems {
         blocked.add(ItemID.POH_FLATPACK_LECTURN6); // Mahogany Eagle (FLATPACK)
         blocked.add(ItemID.POH_FLATPACK_LECTURN7); // Mahogany Demon (FLATPACK)
         blocked.add(ItemID.BH_SUPPLY_CRATE); // Bounty Supply Crate
+
+        // Deadman Annihilation Items
+        blocked.add(ItemID.DEADMAN_2026_WEAPON_ORNAMENT_SCROLL); // Annihilation weapon scroll
+        blocked.add(ItemID.DEADMAN_2026_HOME_TELEPORT_SCROLL); // Annihilation teleport scroll
+        blocked.add(ItemID.DEADMAN_2026_POH_ORNAMENT_SCROLL); // Annihilation blueprints
+        blocked.add(ItemID.DEADMAN_DOGSWORD); // The dogsword
+        blocked.add(ItemID.DEADMAN_THUNDER_KHOPESH); // Thunder khopesh
+        blocked.add(ItemID.MAGIC_ROCK_OF_AVARICE); // Trinket of avarice
+        blocked.add(ItemID.MAGIC_ROCK_OF_FORTUITY_INACTIVE); // Trinket of fortuity (inactive)
+        blocked.add(ItemID.MAGIC_ROCK_OF_FORTUITY_ACTIVE); // Trinket of fortuity (active)
+
         BLOCKED_ITEMS = Collections.unmodifiableSet(blocked);
     }
 }
