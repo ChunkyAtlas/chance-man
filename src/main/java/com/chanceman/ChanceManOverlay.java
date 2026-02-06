@@ -11,8 +11,6 @@ import net.runelite.client.util.ImageUtil;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import javax.sound.sampled.LineUnavailableException;
-import javax.sound.sampled.UnsupportedAudioFileException;
 import java.awt.*;
 import java.awt.geom.Ellipse2D;
 import java.awt.geom.Point2D;
@@ -131,12 +129,10 @@ public class ChanceManOverlay extends Overlay {
                 try {
                     float volumeDb = toDb(config.rollSoundVolume());
                     audioPlayer.play(ChanceManOverlay.class, "/com/chanceman/tick.wav", volumeDb);
-                }
-                catch (IOException | UnsupportedAudioFileException | LineUnavailableException ex) {
+                } catch (IOException ex) {
                     log.warn("ChanceMan: failed to play tick.wav", ex);
-                }
-                catch (Throwable t1) {
-                    log.warn("ChanceMan: unexpected error while playing tick.wav", t1);
+                } catch (Exception ex) { // or Throwable, but Exception is usually enough
+                    log.warn("ChanceMan: unexpected error while playing tick.wav", ex);
                 }
             }, "ChanceMan-Audio");
             t.setDaemon(true);
