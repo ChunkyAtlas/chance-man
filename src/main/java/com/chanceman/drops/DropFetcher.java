@@ -35,7 +35,7 @@ import java.util.concurrent.*;
 @Singleton
 public class DropFetcher
 {
-    private static final String USER_AGENT = "RuneLite-ChanceMan/3.0.1";
+    private static final String USER_AGENT = "RuneLite-ChanceMan/3.0.2";
     private final OkHttpClient httpClient;
     private final ItemManager itemManager;
     private final ClientThread clientThread;
@@ -125,35 +125,61 @@ public class DropFetcher
     private List<DropTableSection> parseSections(Document doc)
     {
         Elements tables = doc.select("table.item-drops");
-
         List<DropTableSection> sections = new ArrayList<>();
 
         for (Element table : tables)
         {
-            String header = "Drops";
-            Element prev = table.previousElementSibling();
-            while (prev != null)
+            Map<String, Integer> col = buildColumnIndexMap(table);
+
+            Integer itemCol = col.get("item");
+            Integer rarityCol = col.get("rarity");
+            if (itemCol == null || rarityCol == null)
             {
-                String tag = prev.tagName();
-                if (tag != null && tag.matches("h[2-4]")) {
-                    header = prev.text();
-                    break;
-                }
-                prev = prev.previousElementSibling();
+                continue; // table not understood
             }
+
+            String header = findSectionHeader(table);
 
             List<DropItem> items = new ArrayList<>();
             Elements rows = table.select("tbody > tr");
-            for (Element row : rows) {
+
+            for (Element row : rows)
+            {
+                // Skip header-like rows inside tbody
+                if (!row.select("th").isEmpty())
+                {
+                    continue;
+                }
+
                 Elements tds = row.select("td");
-                if (tds.size() < 6) {
+                if (itemCol >= tds.size())
+                {
                     continue;
                 }
-                String name = tds.get(1).text().replace("(m)", "").trim();
-                if (name.equalsIgnoreCase("nothing")) {
+
+                Element itemTd = tds.get(itemCol);
+
+                String name = extractItemName(itemTd);
+                if (name.isEmpty() || name.equalsIgnoreCase("nothing"))
+                {
                     continue;
                 }
-                String rarity = tds.get(3).text().trim();
+
+                String rarity = "";
+                if (rarityCol < tds.size())
+                {
+                    rarity = extractRarity(tds.get(rarityCol));
+                }
+                else
+                {
+                    // Fallback: locate a cell containing the new rarity spans
+                    Element rarityTd = row.selectFirst("td:has(span[data-drop-fraction]), td:has(span[data-drop-oneover])");
+                    if (rarityTd != null)
+                    {
+                        rarity = extractRarity(rarityTd);
+                    }
+                }
+
                 items.add(new DropItem(0, name, rarity));
             }
 
@@ -164,6 +190,143 @@ public class DropFetcher
         }
 
         return sections;
+    }
+
+    /** Find the nearest section header preceding the table (supports mw-heading wrappers). */
+    private String findSectionHeader(Element table)
+    {
+        Element prev = table.previousElementSibling();
+        while (prev != null)
+        {
+            if (prev.is("h2,h3,h4"))
+            {
+                String txt = prev.text().trim();
+                return txt.isEmpty() ? "Drops" : txt;
+            }
+
+            if (prev.hasClass("mw-heading"))
+            {
+                Element h = prev.selectFirst("h2,h3,h4");
+                if (h != null)
+                {
+                    String txt = h.text().trim();
+                    return txt.isEmpty() ? "Drops" : txt;
+                }
+            }
+
+            prev = prev.previousElementSibling();
+        }
+        return "Drops";
+    }
+
+    /** Build a normalized map of column name -> index from the table header row. */
+    private Map<String, Integer> buildColumnIndexMap(Element table)
+    {
+        Map<String, Integer> map = new HashMap<>();
+
+        Element headerRow = table.selectFirst("tr:has(th)");
+        if (headerRow == null)
+        {
+            return map;
+        }
+
+        Elements ths = headerRow.select("th");
+        for (int i = 0; i < ths.size(); i++)
+        {
+            Element th = ths.get(i);
+
+            // OSRS wiki uses class "item-col" on the Item column header
+            if (th.hasClass("item-col"))
+            {
+                map.put("item", i);
+            }
+
+            String key = normalizeHeader(th.text());
+            if (!key.isEmpty())
+            {
+                map.put(key, i);
+            }
+        }
+
+        return map;
+    }
+
+    private String normalizeHeader(String s)
+    {
+        if (s == null) return "";
+        String t = s.trim().toLowerCase(Locale.ROOT);
+        if (t.isEmpty()) return "";
+
+        if (t.contains("item")) return "item";
+        if (t.contains("rarity")) return "rarity";
+        return "";
+    }
+
+    /** Extract item name from the item cell. */
+    private String extractItemName(Element itemTd)
+    {
+        if (itemTd == null) return "";
+
+        Element a = itemTd.selectFirst("a.itemlink[title], a[title]");
+        if (a != null)
+        {
+            String title = a.attr("title");
+            if (title != null && !title.trim().isEmpty())
+            {
+                return title.trim();
+            }
+        }
+
+        return itemTd.text().replace("(m)", "").trim();
+    }
+
+    /** Extract rarity from data-drop-* spans. */
+    private String extractRarity(Element rarityTd)
+    {
+        if (rarityTd == null) return "";
+
+        Elements spans = rarityTd.select("span[data-drop-fraction], span[data-drop-oneover]");
+        if (!spans.isEmpty())
+        {
+            List<String> parts = new ArrayList<>();
+            for (Element sp : spans)
+            {
+                String v = sp.hasAttr("data-drop-fraction") ? sp.attr("data-drop-fraction") : "";
+                if (v == null || v.isEmpty())
+                {
+                    v = sp.hasAttr("data-drop-oneover") ? sp.attr("data-drop-oneover") : "";
+                }
+
+                String txt = (v != null && !v.isEmpty()) ? v : sp.text();
+                txt = txt.replace(",", "").trim();
+                if (!txt.isEmpty())
+                {
+                    parts.add(txt);
+                }
+            }
+
+            if (parts.isEmpty())
+            {
+                return "";
+            }
+            if (parts.size() == 1)
+            {
+                return parts.get(0);
+            }
+            if (parts.size() == 2)
+            {
+                return parts.get(0) + "–" + parts.get(1);
+            }
+            return String.join("; ", parts);
+        }
+
+        // Fallback
+        String own = rarityTd.ownText();
+        if (own != null && !own.trim().isEmpty())
+        {
+            return own.trim();
+        }
+        return rarityTd.text().trim();
     }
 
     /** Attempt to parse the combat level from the NPC infobox. */
@@ -209,6 +372,17 @@ public class DropFetcher
         }
 
         String href = link.attr("href");
+        if (href == null || href.isEmpty())
+        {
+            return 0;
+        }
+
+        // Strip query / fragment just in case the canonical ever includes them.
+        int q = href.indexOf('?');
+        if (q >= 0) href = href.substring(0, q);
+        int h = href.indexOf('#');
+        if (h >= 0) href = href.substring(0, h);
+
         String title = href.substring(href.lastIndexOf('/') + 1);
         title = URLDecoder.decode(title, StandardCharsets.UTF_8);
         title = title.replace(' ', '_');
