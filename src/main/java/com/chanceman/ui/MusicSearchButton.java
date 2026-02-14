@@ -3,6 +3,7 @@ package com.chanceman.ui;
 import lombok.Getter;
 import net.runelite.api.Client;
 import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.JavaScriptCallback;
 import net.runelite.api.widgets.Widget;
 import net.runelite.api.widgets.WidgetPositionMode;
@@ -15,9 +16,7 @@ import javax.inject.Singleton;
 
 @Singleton
 public class MusicSearchButton {
-    private static final int MUSIC_GROUP = 239;
-    private static final int CONTENTS = 1; // Music.CONTENTS
-    private static final int FRAME = 2; // Music.FRAME
+    private static final int MUSIC_GROUP = InterfaceID.Music.UNIVERSE >>> 16;
 
     private static final int SPRITE_SEARCH = 1970;
     private static final int W = 14, H = 14;
@@ -53,21 +52,22 @@ public class MusicSearchButton {
     // Create/position the search icon next to "Toggle all"
     public void placeSearchIcon() {
         if (overrideActive) { hide(); return; }
-        Widget contents = client.getWidget(MUSIC_GROUP, CONTENTS);
-        Widget frame = client.getWidget(MUSIC_GROUP, FRAME);
+
+        Widget contents = client.getWidget(InterfaceID.Music.CONTENTS);
+        Widget frame = client.getWidget(InterfaceID.Music.FRAME);
         if (contents == null || frame == null) return;
 
-        Widget root = client.getWidget(MUSIC_GROUP, 0);
+        Widget root = client.getWidget(InterfaceID.Music.UNIVERSE);
         Widget toggleAll = findByAction(root, "Toggle all");
 
         int x, y;
         if (toggleAll != null) {
             x = toggleAll.getOriginalX() - W - GAP - NUDGE_LEFT;
-            y = toggleAll.getOriginalY() + (toggleAll.getOriginalHeight() - H) / 2;
+            y = toggleAll.getOriginalY() + (toggleAll.getOriginalHeight() - H) / 2 + NUDGE_DOWN;
         } else {
             int frameRight = frame.getOriginalX() + frame.getOriginalWidth();
             x = frameRight - W - (GAP + 10) - NUDGE_LEFT;
-            y = Math.max(6, frame.getOriginalY() - H - GAP);
+            y = Math.max(6, frame.getOriginalY() - H - GAP) + NUDGE_DOWN;
         }
 
         if (icon != null && icon.getParentId() != contents.getId()) {
@@ -87,7 +87,9 @@ public class MusicSearchButton {
         icon.revalidate();
     }
 
-    public void hide() { if (icon != null) icon.setHidden(true); }
+    public void hide() {
+        if (icon != null) icon.setHidden(true);
+    }
 
     private void move(Widget w, int x, int y, int width, int height) {
         w.setOriginalX(x);

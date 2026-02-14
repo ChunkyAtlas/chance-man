@@ -16,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.Client;
 import net.runelite.api.ScriptEvent;
 import net.runelite.api.events.WidgetLoaded;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.ItemQuantityMode;
 import net.runelite.api.widgets.JavaScriptCallback;
 import net.runelite.api.widgets.Widget;
@@ -27,16 +28,57 @@ import net.runelite.client.eventbus.Subscribe;
 @Singleton
 public class MusicWidgetController
 {
-    private static final int MUSIC_GROUP = 239;
+    private static final int MUSIC_GROUP = InterfaceID.Music.UNIVERSE >>> 16;
     private static final int ICON_SIZE = 32;
     private static final int PADDING = 4;
     private static final int COLUMNS = 4;
     private static final int MARGIN_X = 8;
     private static final int MARGIN_Y = 8;
     private static final int BAR_HEIGHT = 15;
-    private static final float WIDTH_RATIO = 0.7f;
     private static final int EYE_SIZE = 20;
     private static final int SEARCH_SPRITE = 1113;
+
+    // Widgets we hide during override and MUST ensure come back after restore.
+    private static final int[] RESTORE_FORCE_VISIBLE_PACKEDS = new int[]
+            {
+                    InterfaceID.Music.CONTROLS,
+                    InterfaceID.Music.AREA,
+                    InterfaceID.Music.SHUFFLE,
+                    InterfaceID.Music.SINGLE,
+                    InterfaceID.Music.SKIP,
+                    InterfaceID.Music.PLAYLIST,
+                    InterfaceID.Music.DROPDOWN_CONTAINER,
+                    InterfaceID.Music.DROPDOWN,
+                    InterfaceID.Music.DROPDOWN_CONTENT,
+                    InterfaceID.Music.DROPDOWN_SCROLLBAR,
+                    InterfaceID.Music.COUNT,
+                    InterfaceID.Music.NOW_PLAYING_TEXT,
+            };
+
+    private static final int[] RESTORE_FORCE_SHOW = new int[]
+            {
+                    InterfaceID.Music.CONTROLS,
+                    InterfaceID.Music.AREA,
+                    InterfaceID.Music.SHUFFLE,
+                    InterfaceID.Music.SINGLE,
+                    InterfaceID.Music.SKIP,
+                    InterfaceID.Music.PLAYLIST,
+                    InterfaceID.Music.DROPDOWN_CONTAINER,
+                    InterfaceID.Music.DROPDOWN,
+                    InterfaceID.Music.DROPDOWN_CONTENT,
+                    InterfaceID.Music.DROPDOWN_SCROLLBAR,
+                    InterfaceID.Music.COUNT,
+                    InterfaceID.Music.NOW_PLAYING_TEXT,
+
+                    InterfaceID.Music.JUKEBOX,
+                    InterfaceID.Music.INNER,
+                    InterfaceID.Music.SCROLLABLE,
+                    InterfaceID.Music.SCROLLBAR,
+                    InterfaceID.Music.NOW_PLAYING,
+                    InterfaceID.Music.CONTENTS,
+                    InterfaceID.Music.OVERLAY,
+                    InterfaceID.Music.UNIVERSE
+            };
 
     private final Client client;
     private final ClientThread clientThread;
@@ -47,20 +89,46 @@ public class MusicWidgetController
     private final NpcSearchService searchService;
 
     private NpcDropData currentDrops = null;
-    private List<Widget> backupJukeboxStaticKids = null;
-    private List<Widget> backupJukeboxDynamicKids = null;
-    private List<Widget> backupScrollStaticKids = null;
-    private List<Widget> backupScrollDynamicKids = null;
-    private List<Widget> backupRootStaticKids = null;
-    private List<Widget> backupRootDynamicKids = null;
+
+    private static final class ChildBackup
+    {
+        List<Widget> stat = Collections.emptyList();
+        List<Widget> dyn  = Collections.emptyList();
+
+        boolean captured()
+        {
+            return !stat.isEmpty() || !dyn.isEmpty();
+        }
+    }
+
+    private enum SnapTarget
+    {
+        SCROLLABLE(InterfaceID.Music.SCROLLABLE),
+        JUKEBOX(InterfaceID.Music.JUKEBOX),
+        NOW_PLAYING(InterfaceID.Music.NOW_PLAYING),
+        CONTROLS(InterfaceID.Music.CONTROLS);
+
+        final int packed;
+
+        SnapTarget(int packed)
+        {
+            this.packed = packed;
+        }
+    }
+
+    private final EnumMap<SnapTarget, ChildBackup> backups = new EnumMap<>(SnapTarget.class);
+
     private final List<Widget> overrideRootWidgets = new ArrayList<>();
     private final List<Widget> overrideScrollWidgets = new ArrayList<>();
-    private Integer originalRootType = null;
     private String originalTitleText = null;
+
     @Getter private final Map<Widget, DropItem> iconItemMap = new LinkedHashMap<>();
     @Getter private boolean overrideActive = false;
+
     @Inject private MusicSearchButton musicSearchButton;
     private boolean hideObtainedItems = false;
+
+    private final Map<Integer, Boolean> hiddenStateByPacked = new HashMap<>();
 
     @Inject
     public MusicWidgetController(
@@ -131,14 +199,126 @@ public class MusicWidgetController
         spriteOverrideManager.unregister();
         itemSpriteCache.clear();
         hideObtainedItems = false;
-        clientThread.invokeLater(this::revertOverride);
+
+        runOnClientThread(this::revertOverride);
+    }
+
+    private void runOnClientThread(Runnable r)
+    {
+        if (client.isClientThread())
+        {
+            r.run();
+        }
+        else
+        {
+            clientThread.invoke(r);
+        }
+    }
+
+    private Widget widget(int packed)
+    {
+        return client.getWidget(packed);
+    }
+
+    private void setHiddenRevalidate(Widget w, boolean hidden)
+    {
+        if (w == null)
+        {
+            return;
+        }
+        w.setHidden(hidden);
+        w.revalidate();
+    }
+
+    private void revalidateScroll(Widget scrollbar)
+    {
+        if (scrollbar == null)
+        {
+            return;
+        }
+        scrollbar.revalidate();
+        scrollbar.revalidateScroll();
+    }
+
+    private void rememberAndHidePacked(int packed)
+    {
+        Widget w = widget(packed);
+        if (w == null)
+        {
+            return;
+        }
+        hiddenStateByPacked.putIfAbsent(packed, w.isHidden());
+        setHiddenRevalidate(w, true);
+    }
+
+    private void rememberAndHideAll(int... packeds)
+    {
+        for (int p : packeds)
+        {
+            rememberAndHidePacked(p);
+        }
+    }
+
+    private void restoreHiddenStates()
+    {
+        for (Map.Entry<Integer, Boolean> e : hiddenStateByPacked.entrySet())
+        {
+            Widget w = widget(e.getKey());
+            if (w == null)
+            {
+                continue;
+            }
+            setHiddenRevalidate(w, Boolean.TRUE.equals(e.getValue()));
+        }
+        hiddenStateByPacked.clear();
+    }
+
+    private void forceShowCoreMusicControls()
+    {
+        for (int packed : RESTORE_FORCE_SHOW)
+        {
+            setHiddenRevalidate(widget(packed), false);
+        }
+    }
+
+    private void revalidateAll(int... packeds)
+    {
+        for (int packed : packeds)
+        {
+            Widget w = widget(packed);
+            if (w != null)
+            {
+                w.revalidate();
+            }
+        }
+    }
+
+    private void hardRevalidateMusicTab()
+    {
+        revalidateAll(
+                InterfaceID.Music.CONTROLS,
+                InterfaceID.Music.NOW_PLAYING,
+                InterfaceID.Music.JUKEBOX,
+                InterfaceID.Music.INNER,
+                InterfaceID.Music.SCROLLABLE,
+                InterfaceID.Music.CONTENTS,
+                InterfaceID.Music.UNIVERSE
+        );
+
+        revalidateScroll(widget(InterfaceID.Music.SCROLLBAR));
+    }
+
+    private void settleMusicTab()
+    {
+        forceShowCoreMusicControls();
+        hardRevalidateMusicTab();
     }
 
     private void updateIconsVisibilityAndLayout()
     {
         Set<Integer> obtainedIds = obtainedItemsManager.getObtainedItems();
-        Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
-        Widget scrollbar = client.getWidget(MUSIC_GROUP, 7);
+        Widget scrollable = widget(InterfaceID.Music.SCROLLABLE);
+        Widget scrollbar = widget(InterfaceID.Music.SCROLLBAR);
 
         int displayIndex = 0;
 
@@ -172,27 +352,69 @@ public class MusicWidgetController
             scrollable.setScrollHeight(MARGIN_Y * 2 + rows * (ICON_SIZE + PADDING));
             scrollable.revalidate();
         }
-        if (scrollbar != null)
-        {
-            scrollbar.revalidateScroll();
-        }
+        revalidateScroll(scrollbar);
     }
 
     private static List<Widget> copyChildren(Widget parent, boolean dynamic)
     {
         if (parent == null)
         {
-            return new ArrayList<>();
+            return Collections.emptyList();
         }
         Widget[] kids = dynamic ? parent.getDynamicChildren() : parent.getChildren();
-        if (kids == null) {
-            return new ArrayList<>();
+        if (kids == null)
+        {
+            return Collections.emptyList();
         }
         List<Widget> out = new ArrayList<>(kids.length);
-        for (Widget k : kids) {
+        for (Widget k : kids)
+        {
             if (k != null) out.add(k);
         }
         return out;
+    }
+
+    private void ensureBaselineCaptured()
+    {
+        for (SnapTarget t : SnapTarget.values())
+        {
+            ChildBackup b = backups.computeIfAbsent(t, k -> new ChildBackup());
+            if (b.captured())
+            {
+                continue;
+            }
+            Widget w = widget(t.packed);
+            b.stat = copyChildren(w, false);
+            b.dyn = copyChildren(w, true);
+        }
+    }
+
+    private static void hideChildren(Widget[] kids)
+    {
+        if (kids == null)
+        {
+            return;
+        }
+        for (Widget w : kids)
+        {
+            if (w != null) w.setHidden(true);
+        }
+    }
+
+    private static void unhideAndRevalidate(List<Widget> kids)
+    {
+        if (kids == null)
+        {
+            return;
+        }
+        for (Widget w : kids)
+        {
+            if (w != null && w.getType() != 0)
+            {
+                w.setHidden(false);
+                w.revalidate();
+            }
+        }
     }
 
     private static void restoreChildren(Widget parent, List<Widget> staticKids, List<Widget> dynamicKids)
@@ -202,53 +424,29 @@ public class MusicWidgetController
             return;
         }
 
-        Widget[] currentStatic = parent.getChildren();
-        if (currentStatic != null)
-        {
-            for (Widget w : currentStatic)
-            {
-                if (w != null) {
-                    w.setHidden(true);
-                }
-            }
-        }
+        hideChildren(parent.getChildren());
+        hideChildren(parent.getDynamicChildren());
 
-        Widget[] currentDyn = parent.getDynamicChildren();
-        if (currentDyn != null)
-        {
-            for (Widget w : currentDyn)
-            {
-                if (w != null) {
-                    w.setHidden(true);
-                }
-            }
-        }
-
-        if (staticKids != null)
-        {
-            for (Widget w : staticKids)
-            {
-                if (w != null && w.getType() != 0) {
-                    w.setHidden(false);
-                }
-            }
-        }
-        if (dynamicKids != null)
-        {
-            for (Widget w : dynamicKids)
-            {
-                if (w != null && w.getType() != 0) {
-                    w.setHidden(false);
-                }
-            }
-        }
+        unhideAndRevalidate(staticKids);
+        unhideAndRevalidate(dynamicKids);
 
         parent.revalidate();
     }
 
+    private void restoreBaseline()
+    {
+        for (Map.Entry<SnapTarget, ChildBackup> e : backups.entrySet())
+        {
+            Widget w = widget(e.getKey().packed);
+            ChildBackup b = e.getValue();
+            restoreChildren(w, b.stat, b.dyn);
+        }
+        backups.clear();
+    }
+
     private Widget updateTitle(NpcDropData dropData)
     {
-        Widget title = client.getWidget(MUSIC_GROUP, 8);
+        Widget title = widget(InterfaceID.Music.NOW_PLAYING_TITLE);
         if (title != null)
         {
             if (originalTitleText == null)
@@ -259,6 +457,45 @@ public class MusicWidgetController
             title.revalidate();
         }
         return title;
+    }
+
+    private int absX(Widget root, Widget w)
+    {
+        int x = 0;
+        Widget cur = w;
+        while (cur != null && root != null && cur.getId() != root.getId())
+        {
+            x += cur.getOriginalX();
+            int pid = cur.getParentId();
+            if (pid == -1)
+            {
+                break;
+            }
+            cur = client.getWidget(pid);
+        }
+        return x;
+    }
+
+    private int absY(Widget root, Widget w)
+    {
+        int y = 0;
+        Widget cur = w;
+        while (cur != null && root != null && cur.getId() != root.getId())
+        {
+            y += cur.getOriginalY();
+            int pid = cur.getParentId();
+            if (pid == -1)
+            {
+                break;
+            }
+            cur = client.getWidget(pid);
+        }
+        return y;
+    }
+
+    private int clamp(int v, int min, int max)
+    {
+        return Math.max(min, Math.min(max, v));
     }
 
     private void drawProgressBarAndToggle(Widget root, Widget title, NpcDropData dropData, int obtainedCount, int totalDrops)
@@ -284,41 +521,48 @@ public class MusicWidgetController
         close.revalidate();
         overrideRootWidgets.add(close);
 
-        int lvlX = Objects.requireNonNull(title).getOriginalX() + title.getOriginalWidth() + 83;
-        int lvlY = title.getOriginalY();
+        String lvlText = String.format("Lvl %d", dropData.getLevel());
+        int lvlW = Math.max(60, (lvlText.length() * 6) + 8);
+
+        int titleX = title != null ? absX(root, title) : 0;
+        int titleY = title != null ? absY(root, title) : 0;
+        int titleW = title != null ? title.getOriginalWidth() : 0;
+        int titleH = title != null ? title.getOriginalHeight() : 0;
+
+        Widget frame = widget(InterfaceID.Music.FRAME);
+        int frameX = frame != null ? absX(root, frame) : 0;
+        int frameW = frame != null ? frame.getOriginalWidth() : 0;
+        int frameRight = frameW > 0 ? (frameX + frameW) : (titleX + titleW);
+
+        int lvlX = frameRight - lvlW - PADDING + 15;
+        int lvlY = titleY;
+        lvlX = clamp(lvlX, titleX + titleW + (PADDING * 2), frameRight - 10);
 
         Widget lvl = root.createChild(-1);
         lvl.setHidden(false);
         lvl.setType(WidgetType.TEXT);
-        lvl.setText(String.format("Lvl %d", dropData.getLevel()));
+        lvl.setText(lvlText);
         lvl.setFontId(fontId);
         lvl.setTextShadowed(shadowed);
         lvl.setTextColor(0x00b33c);
         lvl.setOriginalX(lvlX);
         lvl.setOriginalY(lvlY);
-        lvl.setOriginalWidth(title.getOriginalWidth());
-        lvl.setOriginalHeight(title.getOriginalHeight());
+        lvl.setOriginalWidth(lvlW);
+        lvl.setOriginalHeight(titleH);
         lvl.revalidate();
         overrideRootWidgets.add(lvl);
 
-        Widget oldBar = client.getWidget(MUSIC_GROUP, 9);
-        if (oldBar == null)
-        {
-            return;
-        }
-        int xOld = oldBar.getOriginalX();
-        int yOld = oldBar.getOriginalY();
-        int wOld = oldBar.getOriginalWidth();
-        int hOld = oldBar.getOriginalHeight();
+        int barX = titleX;
+        int barY = Math.max(0, titleY + titleH - 1);
 
-        int newW = Math.round(wOld * WIDTH_RATIO);
-        int newY = yOld + (hOld - BAR_HEIGHT) / 2;
+        int rightLimit = lvlX - PADDING;
+        int newW = Math.max(120, rightLimit - barX);
 
         Widget bg = root.createChild(-1);
         bg.setHidden(false);
         bg.setType(WidgetType.RECTANGLE);
-        bg.setOriginalX(xOld);
-        bg.setOriginalY(newY);
+        bg.setOriginalX(barX);
+        bg.setOriginalY(barY);
         bg.setOriginalWidth(newW);
         bg.setOriginalHeight(BAR_HEIGHT);
         bg.setFilled(true);
@@ -335,8 +579,8 @@ public class MusicWidgetController
         Widget fill = root.createChild(-1);
         fill.setHidden(false);
         fill.setType(WidgetType.RECTANGLE);
-        fill.setOriginalX(xOld + border);
-        fill.setOriginalY(newY + border);
+        fill.setOriginalX(barX + border);
+        fill.setOriginalY(barY + border);
         fill.setOriginalWidth(fillW);
         fill.setOriginalHeight(BAR_HEIGHT - border * 2);
         fill.setFilled(true);
@@ -354,13 +598,13 @@ public class MusicWidgetController
         label.setTextShadowed(shadowed);
         label.setOriginalWidth(newW);
         label.setOriginalHeight(BAR_HEIGHT);
-        label.setOriginalX(xOld + (newW / 2) - (txt.length() * 4));
-        label.setOriginalY(newY + (BAR_HEIGHT / 2) - 6);
+        label.setOriginalX(barX + (newW / 2) - (txt.length() * 4));
+        label.setOriginalY(barY + (BAR_HEIGHT / 2) - 6);
         label.revalidate();
         overrideRootWidgets.add(label);
 
-        int eyeX = xOld + newW + 4;
-        int eyeY = newY + (BAR_HEIGHT / 2) - (EYE_SIZE / 2);
+        int eyeX = barX + newW + 4;
+        int eyeY = barY + (BAR_HEIGHT / 2) - (EYE_SIZE / 2);
 
         Widget eye = root.createChild(-1);
         eye.setHidden(false);
@@ -467,28 +711,31 @@ public class MusicWidgetController
         showSearchDialog();
     }
 
+    private void hideOtherMusicUi()
+    {
+        rememberAndHidePacked(InterfaceID.Music.JUKEBOX);
+        rememberAndHideAll(RESTORE_FORCE_VISIBLE_PACKEDS);
+
+        Widget np = widget(InterfaceID.Music.NOW_PLAYING);
+        Widget c = widget(InterfaceID.Music.CONTROLS);
+
+        if (np != null)
+        {
+            WidgetUtils.hideAllChildrenSafely(np);
+            np.revalidate();
+        }
+        if (c != null)
+        {
+            WidgetUtils.hideAllChildrenSafely(c);
+            c.revalidate();
+        }
+    }
+
     private void drawDropIcons(Widget scrollable, Widget scrollbar, Widget jukebox, List<DropItem> drops, Set<Integer> obtainedIds)
     {
         if (scrollable == null || scrollbar == null)
         {
             return;
-        }
-
-        if (backupJukeboxStaticKids == null && jukebox != null)
-        {
-            backupJukeboxStaticKids = copyChildren(jukebox, false);
-        }
-        if (backupJukeboxDynamicKids == null && jukebox != null)
-        {
-            backupJukeboxDynamicKids = copyChildren(jukebox, true);
-        }
-        if (backupScrollStaticKids == null)
-        {
-            backupScrollStaticKids = copyChildren(scrollable, false);
-        }
-        if (backupScrollDynamicKids == null)
-        {
-            backupScrollDynamicKids = copyChildren(scrollable, true);
         }
 
         WidgetUtils.hideAllChildrenSafely(jukebox);
@@ -517,32 +764,8 @@ public class MusicWidgetController
         updateIconsVisibilityAndLayout();
     }
 
-    private void applyOverride(NpcDropData dropData)
+    private List<DropItem> buildDrops(NpcDropData dropData)
     {
-        purgeOverrideWidgets();
-        iconItemMap.clear();
-        int[] toHide = {9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19};
-        for (int childId : toHide)
-        {
-            Widget w = client.getWidget(MUSIC_GROUP, childId);
-            if (w != null)
-            {
-                w.setHidden(true);
-            }
-        }
-
-        Widget root = client.getWidget(MUSIC_GROUP, 0);
-        if (backupRootStaticKids == null && root != null)
-        {
-            backupRootStaticKids = copyChildren(root, false);
-        }
-        if (backupRootDynamicKids == null && root != null)
-        {
-            backupRootDynamicKids = copyChildren(root, true);
-        }
-        overrideRootWidgets.clear();
-        overrideScrollWidgets.clear();
-
         List<DropItem> drops = dropData.getDropTableSections().stream()
                 .filter(sec ->
                 {
@@ -568,7 +791,20 @@ public class MusicWidgetController
                 })
                 .flatMap(sec -> sec.getItems().stream())
                 .collect(Collectors.toList());
-        drops = WidgetUtils.dedupeAndSort(drops, config.sortDropsByRarity());
+
+        return WidgetUtils.dedupeAndSort(drops, config.sortDropsByRarity());
+    }
+
+    private void applyOverride(NpcDropData dropData)
+    {
+        ensureBaselineCaptured();
+        purgeOverrideWidgets();
+        hideOtherMusicUi();
+
+        Widget root = widget(InterfaceID.Music.UNIVERSE);
+        Widget title = updateTitle(dropData);
+
+        List<DropItem> drops = buildDrops(dropData);
 
         Set<Integer> obtainedIds = obtainedItemsManager.getObtainedItems();
         int totalDrops = drops.size();
@@ -576,24 +812,17 @@ public class MusicWidgetController
                 .filter(d -> obtainedIds.contains(d.getItemId()))
                 .count();
 
-        Widget title = updateTitle(dropData);
+        Widget scrollable = widget(InterfaceID.Music.SCROLLABLE);
+        Widget jukebox = widget(InterfaceID.Music.JUKEBOX);
+        Widget scrollbar = widget(InterfaceID.Music.SCROLLBAR);
+
+        setHiddenRevalidate(scrollable, false);
+        setHiddenRevalidate(scrollbar, false);
 
         if (root != null)
         {
-            root.setHidden(false);
-            if (originalRootType == null)
-            {
-                originalRootType = root.getType();
-            }
-            root.setType(WidgetType.LAYER);
-            WidgetUtils.hideAllChildrenSafely(root);
-
             drawProgressBarAndToggle(root, title, dropData, obtainedCount, totalDrops);
         }
-
-        Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
-        Widget jukebox = client.getWidget(MUSIC_GROUP, 6);
-        Widget scrollbar = client.getWidget(MUSIC_GROUP, 7);
 
         drawDropIcons(scrollable, scrollbar, jukebox, drops, obtainedIds);
 
@@ -610,103 +839,24 @@ public class MusicWidgetController
             return;
         }
 
-        Widget root = client.getWidget(MUSIC_GROUP, 0);
-        Widget scrollable = client.getWidget(MUSIC_GROUP, 4);
-        Widget jukebox = client.getWidget(MUSIC_GROUP, 6);
+        purgeOverrideWidgets();
+        restoreBaseline();
 
-        purgeWidgets(overrideRootWidgets);
-        purgeWidgets(overrideScrollWidgets);
-        overrideRootWidgets.clear();
-        overrideScrollWidgets.clear();
+        restoreHiddenStates();
+        settleMusicTab();
 
-        if (root != null)
-        {
-            restoreChildren(root, backupRootStaticKids, backupRootDynamicKids);
-            if (originalRootType != null)
-            {
-                root.setType(originalRootType);
-            }
-        }
+        clientThread.invokeLater(this::settleMusicTab);
 
-        restoreChildren(scrollable, backupScrollStaticKids, backupScrollDynamicKids);
-        restoreChildren(jukebox, backupJukeboxStaticKids, backupJukeboxDynamicKids);
-
-        Widget title = client.getWidget(MUSIC_GROUP, 8);
-        Widget overlay = client.getWidget(MUSIC_GROUP, 5);
-        Widget scrollbar = client.getWidget(MUSIC_GROUP, 7);
-        Widget progress = client.getWidget(MUSIC_GROUP, 9);
-
+        Widget title = widget(InterfaceID.Music.NOW_PLAYING_TITLE);
         if (title != null && originalTitleText != null)
         {
             title.setText(originalTitleText);
             title.revalidate();
-            for (int id = 9; id <= 19; id++)
-            {
-                Widget w = client.getWidget(MUSIC_GROUP, id);
-                if (w != null)
-                {
-                    w.setHidden(false);
-                    w.revalidate();
-                }
-            }
-        }
-
-        if (overlay != null)
-        {
-            overlay.setHidden(false);
-            overlay.revalidate();
-        }
-        if (scrollbar != null)
-        {
-            scrollbar.setHidden(false);
-            scrollbar.revalidate();
-        }
-        if (progress != null)
-        {
-            progress.setHidden(false);
-            progress.revalidate();
-        }
-
-        if (root != null && root.getOnLoadListener() != null)
-        {
-            client.createScriptEvent(root.getOnLoadListener())
-                    .setSource(root)
-                    .run();
-            root.revalidate();
-        }
-        if (overlay != null && overlay.getOnLoadListener() != null)
-        {
-            client.createScriptEvent(overlay.getOnLoadListener())
-                    .setSource(overlay)
-                    .run();
-            overlay.revalidate();
-        }
-        if (scrollbar != null && scrollbar.getOnLoadListener() != null)
-        {
-            client.createScriptEvent(scrollbar.getOnLoadListener())
-                    .setSource(scrollbar)
-                    .run();
-            scrollbar.revalidate();
-        }
-        if (jukebox != null && jukebox.getOnLoadListener() != null)
-        {
-            client.createScriptEvent(jukebox.getOnLoadListener())
-                    .setSource(jukebox)
-                    .run();
-            jukebox.revalidate();
         }
 
         originalTitleText = null;
         currentDrops = null;
         overrideActive = false;
-        backupRootStaticKids = null;
-        backupRootDynamicKids = null;
-        originalRootType = null;
-        backupJukeboxStaticKids = null;
-        backupJukeboxDynamicKids = null;
-        backupScrollStaticKids = null;
-        backupScrollDynamicKids = null;
-        iconItemMap.clear();
         musicSearchButton.onOverrideDeactivated();
     }
 
@@ -730,22 +880,8 @@ public class MusicWidgetController
                 return;
             }
 
-            resetWidgetCaches();
             applyOverride(currentDrops);
         });
-    }
-
-    private void resetWidgetCaches()
-    {
-        purgeOverrideWidgets();
-        backupRootStaticKids = null;
-        backupRootDynamicKids = null;
-        backupScrollStaticKids = null;
-        backupScrollDynamicKids = null;
-        backupJukeboxStaticKids = null;
-        backupJukeboxDynamicKids = null;
-        originalRootType = null;
-        originalTitleText = null;
     }
 
     private void purgeOverrideWidgets()
@@ -754,6 +890,7 @@ public class MusicWidgetController
         purgeWidgets(overrideScrollWidgets);
         overrideRootWidgets.clear();
         overrideScrollWidgets.clear();
+        iconItemMap.clear();
     }
 
     /**
@@ -776,6 +913,10 @@ public class MusicWidgetController
                 w.setOnOpListener((JavaScriptCallback) null);
                 w.setHasListener(false);
                 w.setHidden(true);
+                w.setOriginalX(0);
+                w.setOriginalY(0);
+                w.setOriginalWidth(0);
+                w.setOriginalHeight(0);
                 w.setType(0);
                 w.revalidate();
             } catch (Exception ignored) {}
