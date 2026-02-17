@@ -234,22 +234,25 @@ public class ObtainedItemsManager
             long stamp = (winnerStamp != null) ? winnerStamp : System.currentTimeMillis();
             saveInternal(stamp, false); // bypass debounce during reconcile
         }
+        else if (!Files.exists(newFile) && isExecutorAvailable())
+        {
+            // Ensure file exists locally on fresh machines
+            saveInternal(System.currentTimeMillis(), false);
+        }
 
         dirty = false;
     }
 
     private void migrateLegacyLocalObtainedIfNeeded()
     {
-        Path legacyMarker = safeGetFilePathOrNull(LEGACY_UNLOCKED_FILE);
-        if (legacyMarker == null) return;
-
-        // New players won't have the legacy unlocked marker, so skip.
-        if (!Files.exists(legacyMarker)) return;
-
         Path obtainedFile = safeGetFilePathOrNull(FILE_NAME);
         Path legacyObtained = safeGetFilePathOrNull(LEGACY_FILE_NAME);
-        if (obtainedFile == null || legacyObtained == null) return;
+        Path legacyUnlocked = safeGetFilePathOrNull(LEGACY_UNLOCKED_FILE);
+
+        if (obtainedFile == null || legacyObtained == null || legacyUnlocked == null) return;
+
         if (Files.exists(obtainedFile)) return;
+        if (!Files.exists(legacyUnlocked)) return;
         if (!Files.exists(legacyObtained)) return;
 
         try
@@ -262,7 +265,6 @@ public class ObtainedItemsManager
 
             Files.createDirectories(obtainedFile.getParent());
 
-            // Move legacy -> new
             try
             {
                 Files.move(legacyObtained, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
@@ -279,7 +281,6 @@ public class ObtainedItemsManager
         catch (Exception e)
         {
             log.error("ChanceMan v3 migration: failed to migrate legacy obtained file", e);
-            throw new RuntimeException(e);
         }
     }
 
@@ -475,11 +476,17 @@ public class ObtainedItemsManager
     private Set<Integer> readLocalJson(Path file)
     {
         Set<Integer> local = new LinkedHashSet<>();
-        if (file == null || !Files.exists(file)) return local;
+        if (file == null) return local;
+
         try (Reader r = Files.newBufferedReader(file))
         {
             Set<Integer> loaded = gson.fromJson(r, SET_TYPE);
             if (loaded != null) local.addAll(loaded);
+        }
+        catch (NoSuchFileException ignored)
+        {
+            // Normal on fresh installs / multi-PC / atomic move race
+            return local;
         }
         catch (IOException e)
         {

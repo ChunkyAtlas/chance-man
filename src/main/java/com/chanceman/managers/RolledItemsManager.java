@@ -27,7 +27,6 @@ public class RolledItemsManager
     private static final int MAX_BACKUPS = 10;
     private static final String CFG_KEY = "unlocked";
     private static final String FILE_NAME = "chanceman_rolled.json";
-    private static final String OBTAINED_FILE_NAME = "chanceman_obtained.json";
     private static final String LEGACY_FILE_NAME = "chanceman_unlocked.json";
 
     private static final String BACKUP_TS_PATTERN = "yyyyMMddHHmmss";
@@ -158,7 +157,7 @@ public class RolledItemsManager
     {
         String player = accountManager.getPlayerName();
         if (player == null) return;
-        migrateLegacyObtainedFileIfNeeded();
+        migrateLegacyLocalRolledIfNeeded();
         Path newFile = safeGetFilePathOrNull(FILE_NAME);
         if (newFile == null) return;
 
@@ -205,59 +204,38 @@ public class RolledItemsManager
             long stamp = (winnerStamp != null) ? winnerStamp : System.currentTimeMillis();
             saveInternal(stamp, false); // bypass debounce during reconcile
         }
+        else if (!Files.exists(newFile) && isExecutorAvailable())
+        {
+            // Ensure file exists locally on fresh machines
+            saveInternal(System.currentTimeMillis(), false);
+        }
 
         dirty = false;
     }
 
-    private void migrateLegacyObtainedFileIfNeeded()
+    private void migrateLegacyLocalRolledIfNeeded()
     {
-        Path legacyUnlocked = safeGetFilePathOrNull(LEGACY_FILE_NAME);
-        if (legacyUnlocked == null) return;
-
-        // Legacy marker: if this doesn't exist, it's a new-ish player and we should do nothing.
+        Path rolledFile = safeGetFilePathOrNull(FILE_NAME); // chanceman_rolled.json (new rolled)
+        Path legacyUnlocked = safeGetFilePathOrNull(LEGACY_FILE_NAME); // chanceman_unlocked.json (legacy rolled)
+        if (rolledFile == null || legacyUnlocked == null) return;
+        if (Files.exists(rolledFile)) return;
         if (!Files.exists(legacyUnlocked)) return;
-
-        Path obtainedFile = safeGetFilePathOrNull(OBTAINED_FILE_NAME);
-        Path legacyObtainedFile = safeGetFilePathOrNull("chanceman_rolled.json");
-        if (obtainedFile == null || legacyObtainedFile == null) return;
-
-        // If obtained already exists, migration is done
-        if (Files.exists(obtainedFile)) return;
-
-        // If legacy obtained doesn't exist, nothing to migrate.
-        if (!Files.exists(legacyObtainedFile)) return;
 
         try
         {
-            // Only migrate if legacy obtained actually has data; if it's empty, don't bother.
-            Set<Integer> legacyData = readLocalJson(legacyObtainedFile);
-            if (legacyData.isEmpty())
-            {
-                return;
-            }
+            Set<Integer> legacyData = readLocalJson(legacyUnlocked);
+            if (legacyData.isEmpty()) return;
 
-            // Ensure directory exists
-            Files.createDirectories(obtainedFile.getParent());
+            Files.createDirectories(rolledFile.getParent());
 
-            // Move legacy file into the new obtained file name
-            try
-            {
-                Files.move(legacyObtainedFile, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
-            }
-            catch (IOException moveFail)
-            {
-                // Fallback: copy + delete
-                Files.copy(legacyObtainedFile, obtainedFile, StandardCopyOption.REPLACE_EXISTING);
-                Files.deleteIfExists(legacyObtainedFile);
-            }
+            Files.copy(legacyUnlocked, rolledFile, StandardCopyOption.REPLACE_EXISTING);
 
-            log.info("ChanceMan v3 migration: moved legacy obtained file {} -> {}",
-                    legacyObtainedFile.getFileName(), obtainedFile.getFileName());
+            log.info("ChanceMan v3 migration: copied legacy rolled file {} -> {}",
+                    legacyUnlocked.getFileName(), rolledFile.getFileName());
         }
         catch (Exception e)
         {
-            log.error("ChanceMan v3 migration: failed to migrate legacy obtained rolled.json -> obtained.json; refusing to proceed", e);
-            throw new RuntimeException(e);
+            log.error("ChanceMan v3 migration: failed to migrate legacy rolled file unlocked.json -> rolled.json", e);
         }
     }
 
@@ -430,11 +408,16 @@ public class RolledItemsManager
     private Set<Integer> readLocalJson(Path file)
     {
         Set<Integer> local = new LinkedHashSet<>();
-        if (file == null || !Files.exists(file)) return local;
+        if (file == null) return local;
+
         try (Reader r = Files.newBufferedReader(file))
         {
             Set<Integer> loaded = gson.fromJson(r, SET_TYPE);
             if (loaded != null) local.addAll(loaded);
+        }
+        catch (NoSuchFileException ignored)
+        {
+            return local;
         }
         catch (IOException e)
         {
