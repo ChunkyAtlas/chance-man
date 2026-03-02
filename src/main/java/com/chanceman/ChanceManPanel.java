@@ -154,21 +154,43 @@ public class ChanceManPanel extends PluginPanel
         titleLabel.setFont(new Font("SansSerif", Font.BOLD, 18));
         titleLabel.setForeground(new Color(220, 220, 220));
 
+        JButton tracker = new JButton();
+        tracker.setToolTipText("Chance Man Tracker");
+        ImageIcon trackerIcon = new ImageIcon(
+                Objects.requireNonNull(getClass().getResource("/net/runelite/client/plugins/chanceman/cmticon.png"))
+        );
+        Image trackerScaled = trackerIcon.getImage().getScaledInstance(20, 20, Image.SCALE_SMOOTH);
+        tracker.setIcon(new ImageIcon(trackerScaled));
+        tracker.setOpaque(false);
+        tracker.setContentAreaFilled(false);
+        tracker.setBorderPainted(false);
+        tracker.setFocusable(false);
+        tracker.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
+        tracker.addActionListener(e -> LinkBrowser.browse("https://chanceman-tracker.github.io"));
+
         JButton discord = new JButton();
         discord.setToolTipText("Join The Chance Man Discord");
         ImageIcon discordIcon = new ImageIcon(
                 Objects.requireNonNull(getClass().getResource("/net/runelite/client/plugins/chanceman/discord.png"))
         );
-        Image scaledImage = discordIcon.getImage().getScaledInstance(20, 20, Image.SCALE_SMOOTH);
-        discord.setIcon(new ImageIcon(scaledImage));
+        Image discordScaled = discordIcon.getImage().getScaledInstance(20, 20, Image.SCALE_SMOOTH);
+        discord.setIcon(new ImageIcon(discordScaled));
         discord.setOpaque(false);
         discord.setContentAreaFilled(false);
         discord.setBorderPainted(false);
+        discord.setFocusable(false);
+        discord.setCursor(Cursor.getPredefinedCursor(Cursor.HAND_CURSOR));
         discord.addActionListener(e -> LinkBrowser.browse("https://discord.gg/TMkAYXxncU"));
+
+        JPanel rightButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+        rightButtons.setOpaque(false);
+        rightButtons.add(tracker);
+        rightButtons.add(Box.createHorizontalStrut(6));
+        rightButtons.add(discord);
 
         headerPanel.add(iconLabel, BorderLayout.WEST);
         headerPanel.add(titleLabel, BorderLayout.CENTER);
-        headerPanel.add(discord, BorderLayout.EAST);
+        headerPanel.add(rightButtons, BorderLayout.EAST);
 
         return headerPanel;
     }
