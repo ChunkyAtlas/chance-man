@@ -7,6 +7,7 @@ import com.chanceman.drops.DropCache;
 import com.chanceman.filters.EnsouledHeadMapping;
 import com.chanceman.menus.ActionHandler;
 import com.chanceman.filters.ItemsFilter;
+import com.chanceman.menus.TutorialIslandGuard;
 import com.chanceman.ui.DropsTabUI;
 import com.chanceman.ui.DropsTooltipOverlay;
 import com.chanceman.ui.MusicWidgetController;
@@ -73,6 +74,7 @@ public class ChanceManPlugin extends Plugin
     @Inject private NpcSearchService npcSearchService;
     @Inject private MusicSearchButton musicSearchButton;
     @Inject private ItemDimmerController itemDimmerController;
+    @Inject private TutorialIslandGuard tutorialIslandGuard;
 
     private ChanceManPanel chanceManPanel;
     private NavigationButton navButton;
@@ -106,6 +108,8 @@ public class ChanceManPlugin extends Plugin
     {
         if (featuresActive) return;
         featuresActive = true;
+
+        tutorialIslandGuard.startUp();
 
         getInjector().getInstance(ActionHandler.class).startUp();
         accountManager.init();
@@ -185,6 +189,8 @@ public class ChanceManPlugin extends Plugin
     {
         if (!featuresActive) return;
         featuresActive = false;
+
+        tutorialIslandGuard.shutDown();
 
         try
         {
