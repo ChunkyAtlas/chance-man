@@ -22,6 +22,7 @@ import com.chanceman.managers.RolledItemsManager;
 import com.chanceman.managers.ObtainedItemsManager;
 import net.runelite.api.*;
 import net.runelite.api.events.*;
+import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.widgets.Widget;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageManager;
@@ -372,7 +373,7 @@ public class ChanceManPlugin extends Plugin
 
     private void killSearchResults()
     {
-        Widget geSearchResults = client.getWidget(162, 51);
+        Widget geSearchResults = client.getWidget(InterfaceID.Chatbox.MES_LAYER_SCROLLCONTENTS);
         if (geSearchResults == null)
         {
             return;
