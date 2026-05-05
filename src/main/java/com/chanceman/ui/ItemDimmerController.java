@@ -209,7 +209,7 @@ public class ItemDimmerController {
             boolean tradeable = false;
             final ItemComposition comp = itemManager.getItemComposition(canonicalItemId);
             if (comp != null) {
-                tradeable = comp.isTradeable();
+                tradeable = comp.isGeTradeable();
             }
 
             tradeableCache.put(canonicalItemId, tradeable);

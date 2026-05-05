@@ -270,7 +270,7 @@ public class ChanceManPlugin extends Plugin
             for (int i = 0; i < 40000; i++)
             {
                 ItemComposition comp = itemManager.getItemComposition(i);
-                if (comp != null && comp.isTradeable() && !isNotTracked(i)
+                if (comp != null && comp.isGeTradeable() && !isNotTracked(i)
                         && !ItemsFilter.isBlocked(i, config))
                 {
                     if (config.freeToPlay() && comp.isMembers())
@@ -417,7 +417,7 @@ public class ChanceManPlugin extends Plugin
         TileItem tileItem = (TileItem) event.getItem();
         int itemId = EnsouledHeadMapping.toTradeableId(tileItem.getId());
         int canonicalItemId = itemManager.canonicalize(itemId);
-        if (!isTradeable(canonicalItemId) || isNotTracked(canonicalItemId))
+        if (!isGeTradeable(canonicalItemId) || isNotTracked(canonicalItemId))
         {
             return;
         }
@@ -446,7 +446,7 @@ public class ChanceManPlugin extends Plugin
                 int rawItemId = item.getId();
                 int mapped = EnsouledHeadMapping.toTradeableId(rawItemId);
                 int canonicalId = itemManager.canonicalize(mapped);
-                if (!isTradeable(canonicalId) || isNotTracked(canonicalId))
+                if (!isGeTradeable(canonicalId) || isNotTracked(canonicalId))
                 {
                     continue;
                 }
@@ -483,10 +483,10 @@ public class ChanceManPlugin extends Plugin
         }
     }
 
-    public boolean isTradeable(int itemId)
+    public boolean isGeTradeable(int itemId)
     {
         ItemComposition comp = itemManager.getItemComposition(itemId);
-        return comp != null && comp.isTradeable();
+        return comp != null && comp.isGeTradeable();
     }
 
     public boolean isNotTracked(int itemId)

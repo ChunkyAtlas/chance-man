@@ -196,7 +196,7 @@ public class ActionHandler {
 	 */
 	private boolean isLockedGroundItem(int itemId)
 	{
-		return plugin.isTradeable(itemId)
+		return plugin.isGeTradeable(itemId)
 				&& !plugin.isNotTracked(itemId)
 				&& !rolledItemsManager.isRolled(itemId);
 	}
@@ -282,7 +282,7 @@ public class ActionHandler {
 					: event.getMenuEntry().getItemId();
 			int mapped = EnsouledHeadMapping.toTradeableId(rawItemId);
 			int canonicalGroundId = itemManager.canonicalize(mapped);
-			if (plugin.isTradeable(canonicalGroundId)
+			if (plugin.isGeTradeable(canonicalGroundId)
 					&& !plugin.isNotTracked(canonicalGroundId)
 					&& rolledItemsManager != null
 					&& !rolledItemsManager.isRolled(canonicalGroundId)) {
