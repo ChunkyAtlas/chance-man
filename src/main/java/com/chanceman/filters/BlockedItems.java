@@ -321,6 +321,30 @@ public final class BlockedItems {
         blocked.add(ItemID.MAGIC_ROCK_OF_FORTUITY_INACTIVE); // Trinket of fortuity (inactive)
         blocked.add(ItemID.MAGIC_ROCK_OF_FORTUITY_ACTIVE); // Trinket of fortuity (active)
 
+        // Demonic Pacts (Leagues VI)
+        blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_HOOD_T1); // Demonic hood (t1)
+        blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_TOP_T1); // Demonic robe top (t1)
+        blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_LEGS_T1); // Demonic robe bottom (t1)
+        blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_BOOTS_T1); // Demonic boots (t1)
+        blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_HOOD_T2); // Demonic hood (t2)
+        blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_TOP_T2); // Demonic robe top (t2)
+        blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_LEGS_T2); // Demonic robe bottom (t2)
+        blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_BOOTS_T2); // Demonic boots (t2)
+        blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_HOOD_T3); // Demonic hood (t3)
+        blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_TOP_T3); // Demonic robe top (t3)
+        blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_LEGS_T3); // Demonic robe bottom (t3)
+        blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_BOOTS_T3); // Demonic boots (t3)
+        blocked.add(ItemID.LEAGUE_6_BANNER); // Demonic pacts banner
+        blocked.add(ItemID.LEAGUE_6_RITUAL_KIT); // Impish ritual kit
+        blocked.add(ItemID.LEAGUE_6_THRONE); // Demonic pacts throne scroll
+        blocked.add(ItemID.LEAGUE_6_THRALL_CONTRACT); // Impish whistle
+        blocked.add(ItemID.DEMONIC_TRIDENT_ORNAMENT_KIT); // Demonic trident ornament kit
+        blocked.add(ItemID.DEMONIC_STAFF_ORNAMENT_KIT); // Demonic staff ornament kit
+        blocked.add(ItemID.DEMONIC_AXE_ORNAMENT_KIT); // Demonic axe ornament kit
+        blocked.add(ItemID.LEAGUE_6_DEMONIC_QUILL); // Demonic quill
+        blocked.add(ItemID.LEAGUE_6_BUTLER_SCROLL); // Demonic pacts demon butler scroll
+        blocked.add(ItemID.DEMONIC_SKIN_ORNAMENT_KIT); //Demonic skin contract
+
         BLOCKED_ITEMS = Collections.unmodifiableSet(blocked);
     }
 }
