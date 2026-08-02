@@ -194,10 +194,6 @@ public class ChanceManOverlay extends Overlay {
             return null;
         }
 
-        // Rendering hints once per frame
-        g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
-        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
-
         final long nowNs = System.nanoTime();
         final long elapsedMs = (nowNs - rollStartNs) / 1_000_000L;
         final boolean inHighlightPhase = (elapsedMs > rollDurationMs);
@@ -221,159 +217,172 @@ public class ChanceManOverlay extends Overlay {
         final float eased = (float) Math.pow(1f - t, 3);
         currentSpeed = MIN_SPEED + (INITIAL_SPEED - MIN_SPEED) * eased;
 
+        final RollOverlayScale configuredScale = config.rollOverlayScale();
+        final float overlayScale = configuredScale == null ? 1f : configuredScale.getScale();
+
         // Viewport + box geometry
         final int vpX = client.getViewportXOffset();
         final int vpY = client.getViewportYOffset();
         final int vpWidth = client.getViewportWidth();
         final int centerX = vpX + (vpWidth / 2);
-        final int boxTopY = vpY + OFFSET_TOP;
 
-        final int totalIconsWidth = ICON_COUNT * ICON_W + (ICON_COUNT - 1) * SPACING;
-        final int totalWidthWithBuffer = totalIconsWidth + EXTRA_WIDTH_BUFFER;
-        final int boxWidth = totalWidthWithBuffer + OUTER_PAD * 2;
-        final int boxHeight = ICON_H + OUTER_PAD * 2;
-        final int boxLeftX = centerX - (boxWidth / 2) + BOX_SHIFT_X;
+        final Graphics2D overlayGraphics = (Graphics2D) g.create();
+        try {
+            overlayGraphics.translate(centerX, vpY + OFFSET_TOP);
+            overlayGraphics.scale(overlayScale, overlayScale);
+            overlayGraphics.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            overlayGraphics.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
-        // Content rect
-        final int contentLeftX = boxLeftX + OUTER_PAD;
-        final int innerWidth = boxWidth - OUTER_PAD * 2;
-        final float contentCenterX = contentLeftX + innerWidth / 2f + CENTER_NUDGE_PX;
-        final float middleIndex = ICON_COUNT / 2f;
-        final float iconsLeftXF = contentCenterX - middleIndex * STEP - ICON_W / 2f;
-        final int iconsY = boxTopY + OUTER_PAD;
+            final int boxTopY = 0;
+            final int totalIconsWidth = ICON_COUNT * ICON_W + (ICON_COUNT - 1) * SPACING;
+            final int totalWidthWithBuffer = totalIconsWidth + EXTRA_WIDTH_BUFFER;
+            final int boxWidth = totalWidthWithBuffer + OUTER_PAD * 2;
+            final int boxHeight = ICON_H + OUTER_PAD * 2;
+            final int boxLeftX = -(boxWidth / 2) + BOX_SHIFT_X;
 
-        // Background frame + subtle lines
-        if (rollBoxImage != null) {
-            final Composite prev = g.getComposite();
-            g.setComposite(AlphaComposite.SrcOver.derive(0.95f));
-            g.drawImage(rollBoxImage, boxLeftX, boxTopY, boxWidth, boxHeight, null);
-            g.setComposite(prev);
+            // Content rect
+            final int contentLeftX = boxLeftX + OUTER_PAD;
+            final int innerWidth = boxWidth - OUTER_PAD * 2;
+            final float contentCenterX = contentLeftX + innerWidth / 2f + CENTER_NUDGE_PX;
+            final float middleIndex = ICON_COUNT / 2f;
+            final float iconsLeftXF = contentCenterX - middleIndex * STEP - ICON_W / 2f;
+            final int iconsY = boxTopY + OUTER_PAD;
 
-            g.setColor(SHADE_BOTTOM);
-            g.fillRect(boxLeftX, boxTopY + boxHeight - 2, boxWidth, 2);
-            g.setColor(SHADE_TOP);
-            g.drawLine(boxLeftX + 2, boxTopY + 2, boxLeftX + boxWidth - 3, boxTopY + 2);
-        }
+            // Background frame + subtle lines
+            if (rollBoxImage != null) {
+                final Composite prev = overlayGraphics.getComposite();
+                overlayGraphics.setComposite(AlphaComposite.SrcOver.derive(0.95f));
+                overlayGraphics.drawImage(rollBoxImage, boxLeftX, boxTopY, boxWidth, boxHeight, null);
+                overlayGraphics.setComposite(prev);
 
-        // Clip to the strip content
-        final Shape oldClip = g.getClip();
-        g.setClip(contentLeftX, boxTopY + OUTER_PAD, innerWidth, ICON_H);
-
-        synchronized (rollingItems) {
-            // Begin snap near the end of spin (or immediately if we already hit highlight)
-            final long remainingMs = rollDurationMs - elapsedMs;
-            if (!isSnapping && (remainingMs <= SNAP_DURATION_MS || inHighlightPhase)) {
-                startSnap(nowNs);
+                overlayGraphics.setColor(SHADE_BOTTOM);
+                overlayGraphics.fillRect(boxLeftX, boxTopY + boxHeight - 2, boxWidth, 2);
+                overlayGraphics.setColor(SHADE_TOP);
+                overlayGraphics.drawLine(boxLeftX + 2, boxTopY + 2, boxLeftX + boxWidth - 3, boxTopY + 2);
             }
 
-            // Advance motion
-            if (!inHighlightPhase) {
-                if (isSnapping) {
-                    // Smoothstep to the target slot
-                    final long snapElapsedNs = nowNs - snapStartNs;
-                    final float u = Math.min(1f, snapElapsedNs / (SNAP_DURATION_MS * 1_000_000f));
-                    final float s = u * u * (3f - 2f * u);
-                    final float start = rollOffset;
-                    final float end = snapTarget;
-                    rollOffset = start + (end - start) * s;
+            // Clip to the strip content
+            final Shape oldClip = overlayGraphics.getClip();
+            overlayGraphics.setClip(contentLeftX, boxTopY + OUTER_PAD, innerWidth, ICON_H);
 
-                    if (rollOffset >= STEP) {
-                        normalizeOnce();
-                        winnerDelta = 0;
-                        snapBase = 0f;
-                        snapTarget = 0f;
-                        snapResidualStart = 0f;
+            synchronized (rollingItems) {
+                // Begin snap near the end of spin (or immediately if we already hit highlight)
+                final long remainingMs = rollDurationMs - elapsedMs;
+                if (!isSnapping && (remainingMs <= SNAP_DURATION_MS || inHighlightPhase)) {
+                    startSnap(nowNs);
+                }
+
+                // Advance motion
+                if (!inHighlightPhase) {
+                    if (isSnapping) {
+                        // Smoothstep to the target slot
+                        final long snapElapsedNs = nowNs - snapStartNs;
+                        final float u = Math.min(1f, snapElapsedNs / (SNAP_DURATION_MS * 1_000_000f));
+                        final float s = u * u * (3f - 2f * u);
+                        final float start = rollOffset;
+                        final float end = snapTarget;
+                        rollOffset = start + (end - start) * s;
+
+                        if (rollOffset >= STEP) {
+                            normalizeOnce();
+                            winnerDelta = 0;
+                            snapBase = 0f;
+                            snapTarget = 0f;
+                            snapResidualStart = 0f;
+                        }
+                    } else {
+                        rollOffset += currentSpeed * dt;
+                        while (rollOffset >= STEP) {
+                            normalizeOnce();
+                        }
                     }
                 } else {
-                    rollOffset += currentSpeed * dt;
-                    while (rollOffset >= STEP) {
-                        normalizeOnce();
-                    }
-                }
-            } else {
-                // During highlight, ensure exact snap
-                if (isSnapping) {
-                    rollOffset = snapTarget;
-                    if (rollOffset >= STEP) {
-                        normalizeOnce();
-                        winnerDelta = 0;
-                    }
-                }
-            }
-
-            // Inner content area of the frame
-            final int innerBoxXInset = FRAME_CONTENT_INSET;
-            final int innerBoxYInset = FRAME_CONTENT_INSET;
-            final int innerBoxW = ICON_W - innerBoxXInset * 2;
-            final int innerBoxH = ICON_H - innerBoxYInset * 2;
-
-            // Draw items
-            final int itemsToDraw = Math.min(rollingItems.size(), DRAW_COUNT);
-            for (int i = 0; i < itemsToDraw; i++) {
-                final int itemId = rollingItems.get(i);
-                final BufferedImage image = itemManager.getImage(itemId, 1, false);
-                if (image == null) continue;
-
-                final float drawXF = iconsLeftXF + i * STEP - rollOffset;
-                final int drawX = Math.round(drawXF);
-
-                if (iconFrameImage != null) {
-                    g.drawImage(iconFrameImage, drawX, iconsY, ICON_W, ICON_H, null);
-                }
-
-                final int x = drawX + innerBoxXInset;
-                final int y = iconsY + innerBoxYInset;
-                g.drawImage(image, x, y, innerBoxW, innerBoxH, null);
-            }
-
-            // Highlight winner
-            if (inHighlightPhase) {
-                final int centerIndex = ICON_COUNT / 2;
-                final int winnerIndex = Math.min(centerIndex + winnerDelta, rollingItems.size() - 1);
-
-                final float baseXF = iconsLeftXF + centerIndex * STEP - rollOffset;
-                final int baseX = Math.round(baseXF);
-
-                final int glowW = (int) (ICON_W * 2.2);
-                final int glowH = (int) (ICON_H * 2.2);
-                final float cx = baseX + ICON_W / 2f;
-                final float cy = iconsY + ICON_H / 2f;
-
-                // Radial glow
-                final RadialGradientPaint glow = new RadialGradientPaint(
-                        new Point2D.Float(cx, cy),
-                        glowW / 2f,
-                        new float[]{0f, 1f},
-                        new Color[]{
-                                new Color(255, 255, 160, 150),
-                                new Color(255, 255, 160, 0)
+                    // During highlight, ensure exact snap
+                    if (isSnapping) {
+                        rollOffset = snapTarget;
+                        if (rollOffset >= STEP) {
+                            normalizeOnce();
+                            winnerDelta = 0;
                         }
-                );
-                final Composite old = g.getComposite();
-                g.setComposite(AlphaComposite.SrcOver.derive(0.85f));
-                g.setPaint(glow);
-                g.fill(new Ellipse2D.Float(cx - glowW / 2f, cy - glowH / 2f, glowW, glowH));
-                g.setComposite(old);
+                    }
+                }
 
-                // Slightly larger winner icon, centered inside the frame
-                final float centerScale = 1.12f;
-                final int innerBoxX = baseX + innerBoxXInset;
-                final int innerBoxY = iconsY + innerBoxYInset;
+                // Inner content area of the frame
+                final int innerBoxXInset = FRAME_CONTENT_INSET;
+                final int innerBoxYInset = FRAME_CONTENT_INSET;
+                final int innerBoxW = ICON_W - innerBoxXInset * 2;
+                final int innerBoxH = ICON_H - innerBoxYInset * 2;
 
-                final int scaledW = (int) (innerBoxW * centerScale);
-                final int scaledH = (int) (innerBoxH * centerScale);
-                final int scaledX = innerBoxX + (innerBoxW - scaledW) / 2;
-                final int scaledY = innerBoxY + (innerBoxH - scaledH) / 2;
+                // Draw items
+                final int itemsToDraw = Math.min(rollingItems.size(), DRAW_COUNT);
+                for (int i = 0; i < itemsToDraw; i++) {
+                    final int itemId = rollingItems.get(i);
+                    final BufferedImage image = itemManager.getImage(itemId, 1, false);
+                    if (image == null) continue;
 
-                final int centerItemId = rollingItems.get(winnerIndex);
-                final BufferedImage centerImg = itemManager.getImage(centerItemId, 1, false);
-                if (centerImg != null) {
-                    g.drawImage(centerImg, scaledX, scaledY, scaledW, scaledH, null);
+                    final float drawXF = iconsLeftXF + i * STEP - rollOffset;
+                    final int drawX = Math.round(drawXF);
+
+                    if (iconFrameImage != null) {
+                        overlayGraphics.drawImage(iconFrameImage, drawX, iconsY, ICON_W, ICON_H, null);
+                    }
+
+                    final int x = drawX + innerBoxXInset;
+                    final int y = iconsY + innerBoxYInset;
+                    overlayGraphics.drawImage(image, x, y, innerBoxW, innerBoxH, null);
+                }
+
+                // Highlight winner
+                if (inHighlightPhase) {
+                    final int centerIndex = ICON_COUNT / 2;
+                    final int winnerIndex = Math.min(centerIndex + winnerDelta, rollingItems.size() - 1);
+
+                    final float baseXF = iconsLeftXF + centerIndex * STEP - rollOffset;
+                    final int baseX = Math.round(baseXF);
+
+                    final int glowW = (int) (ICON_W * 2.2);
+                    final int glowH = (int) (ICON_H * 2.2);
+                    final float cx = baseX + ICON_W / 2f;
+                    final float cy = iconsY + ICON_H / 2f;
+
+                    // Radial glow
+                    final RadialGradientPaint glow = new RadialGradientPaint(
+                            new Point2D.Float(cx, cy),
+                            glowW / 2f,
+                            new float[]{0f, 1f},
+                            new Color[]{
+                                    new Color(255, 255, 160, 150),
+                                    new Color(255, 255, 160, 0)
+                            }
+                    );
+                    final Composite old = overlayGraphics.getComposite();
+                    overlayGraphics.setComposite(AlphaComposite.SrcOver.derive(0.85f));
+                    overlayGraphics.setPaint(glow);
+                    overlayGraphics.fill(new Ellipse2D.Float(cx - glowW / 2f, cy - glowH / 2f, glowW, glowH));
+                    overlayGraphics.setComposite(old);
+
+                    // Slightly larger winner icon, centered inside the frame
+                    final float centerScale = 1.12f;
+                    final int innerBoxX = baseX + innerBoxXInset;
+                    final int innerBoxY = iconsY + innerBoxYInset;
+
+                    final int scaledW = (int) (innerBoxW * centerScale);
+                    final int scaledH = (int) (innerBoxH * centerScale);
+                    final int scaledX = innerBoxX + (innerBoxW - scaledW) / 2;
+                    final int scaledY = innerBoxY + (innerBoxH - scaledH) / 2;
+
+                    final int centerItemId = rollingItems.get(winnerIndex);
+                    final BufferedImage centerImg = itemManager.getImage(centerItemId, 1, false);
+                    if (centerImg != null) {
+                        overlayGraphics.drawImage(centerImg, scaledX, scaledY, scaledW, scaledH, null);
+                    }
                 }
             }
-        }
 
-        g.setClip(oldClip);
+            overlayGraphics.setClip(oldClip);
+        } finally {
+            overlayGraphics.dispose();
+        }
         return null;
     }
 
@@ -392,6 +401,7 @@ public class ChanceManOverlay extends Overlay {
             }
         }
     }
+
     /**
      * Initializes snap state targeting the nearest slot boundary.
      * Ensures roll always aligns to a slot even if the highlight phase began before the snap window ticked.

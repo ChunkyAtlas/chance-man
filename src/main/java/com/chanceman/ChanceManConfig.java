@@ -73,21 +73,27 @@ public interface ChanceManConfig extends Config
     )
     default int rollSoundVolume() { return 50; }
 
+    @ConfigItem(
+            keyName = "rollOverlayScale",
+            name = "Rolling Overlay Scale",
+            description = "Controls the size of the rolling overlay. 100% matches the current size.",
+            position = 8
+    )
+    default RollOverlayScale rollOverlayScale() { return RollOverlayScale.SCALE_100; }
 
     @ConfigItem(
             keyName = "requireRolledUnlockedForGe",
             name = "GE Requires Obtained and Rolled",
             description = "Only Allow Grand Exchange results for items that have been both obtained and rolled.",
-            position = 8
+            position = 9
     )
     default boolean requireRolledUnlockedForGe() { return true; }
-
 
     @ConfigItem(
             keyName = "sortDropsByRarity",
             name = "Sort Drops by Rarity",
             description = "Order drops in the Show Drops menu by rarity instead of item ID.",
-            position = 9
+            position = 10
     )
     default boolean sortDropsByRarity() { return true; }
 
@@ -95,7 +101,7 @@ public interface ChanceManConfig extends Config
             keyName = "showRareDropTable",
             name = "Show Rare Drop Table",
             description = "Include rare drop table items in the Show Drops menu.",
-            position = 10
+            position = 11
     )
     default boolean showRareDropTable() { return true; }
 
@@ -103,7 +109,7 @@ public interface ChanceManConfig extends Config
             keyName = "showGemDropTable",
             name = "Show Gem Drop Table",
             description = "Include gem drop table items in the Show Drops menu.",
-            position = 11
+            position = 12
     )
     default boolean showGemDropTable() { return true; }
 
@@ -111,7 +117,7 @@ public interface ChanceManConfig extends Config
             keyName = "showDropsAlwaysOpen",
             name = "Show Drops Always Open",
             description = "Keep the Show Drops view active when switching away from the Music tab. Use the close button to exit.",
-            position = 12
+            position = 13
     )
     default boolean showDropsAlwaysOpen()
     {
@@ -122,7 +128,7 @@ public interface ChanceManConfig extends Config
             keyName = "deprioritizeLockedOptions",
             name = "Deprioritize Locked Menu Options",
             description = "Sorts locked menu options below the Walk Here option.",
-            position = 13
+            position = 14
     )
     default boolean deprioritizeLockedOptions() { return true; }
 
@@ -130,7 +136,7 @@ public interface ChanceManConfig extends Config
             keyName = "unlockedItemColor",
             name = "Unlocked Item Color",
             description = "Color of the unlocked item name in chat messages.",
-            position = 14
+            position = 15
     )
     default Color unlockedItemColor()
     {
@@ -141,7 +147,7 @@ public interface ChanceManConfig extends Config
             keyName = "rolledItemColor",
             name = "Rolled Item Color",
             description = "Color of the item used to unlock another item.",
-            position = 15
+            position = 16
     )
     default Color rolledItemColor()
     {
@@ -152,7 +158,7 @@ public interface ChanceManConfig extends Config
             keyName = "dimLockedItemsEnabled",
             name = "Dim locked items",
             description = "Dim any item icons that have not been unlocked.",
-            position = 16
+            position = 17
     )
     default boolean dimLockedItemsEnabled()
     {
@@ -164,7 +170,7 @@ public interface ChanceManConfig extends Config
             keyName = "dimLockedItemsOpacity",
             name = "Dim opacity",
             description = "0 = no dim (fully visible), 255 = fully transparent.",
-            position = 17
+            position = 18
     )
     default int dimLockedItemsOpacity()
     {
