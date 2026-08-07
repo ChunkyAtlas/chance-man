@@ -3,7 +3,10 @@ package com.chanceman.drops;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import lombok.RequiredArgsConstructor;
+import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ItemComposition;
 import net.runelite.client.callback.ClientThread;
@@ -12,505 +15,701 @@ import net.runelite.http.api.item.ItemPrice;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import okhttp3.Response;
-import org.jsoup.Jsoup;
-import org.jsoup.nodes.Document;
-import org.jsoup.nodes.Element;
-import org.jsoup.select.Elements;
+import okhttp3.ResponseBody;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.io.IOException;
 import java.io.UncheckedIOException;
-import java.net.URLDecoder;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.StringJoiner;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
- * Retrieves NPC drop information from the wiki and
- * resolves item and NPC IDs.
+ * Retrieves exact NPC drop data from the OSRS Wiki Bucket API.
  */
 @Slf4j
 @Singleton
-public class DropFetcher
-{
-    private static final String USER_AGENT = "RuneLite-ChanceMan/3.2.0";
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class DropFetcher {
+    private static final String USER_AGENT = "RuneLite-ChanceMan";
+    private static final String WIKI_API = "https://oldschool.runescape.wiki/api.php";
+    private static final int ITEM_SCAN_LIMIT = 40_000;
+
     private final OkHttpClient httpClient;
     private final ItemManager itemManager;
     private final ClientThread clientThread;
+
+    private final Map<String, WikiPageMetadata> metadataCache = new ConcurrentHashMap<>();
+    private final Map<String, List<WikiDropBucketParser.BucketDrop>> dropRowsCache = new ConcurrentHashMap<>();
+    private final Map<String, Integer> itemIdByName = new ConcurrentHashMap<>();
+    private final Map<String, Integer> allItemIdByName = new ConcurrentHashMap<>();
+
+    private volatile boolean itemIndexReady;
     private ExecutorService fetchExecutor;
 
-    @Inject
-    public DropFetcher(OkHttpClient httpClient, ItemManager itemManager, ClientThread clientThread)
-    {
-        this.httpClient = httpClient;
-        this.itemManager  = itemManager;
-        this.clientThread = clientThread;
+    private static String variantIdentity(
+            WikiMonsterMetadataParser.Variant variant,
+            int npcId,
+            int level) {
+        if (npcId > 0) {
+            return "id:" + npcId;
+        }
+
+        return "variant:"
+                + WikiMonsterMetadataParser.normalizeForComparison(variant.getVersion())
+                + "|drops:" + String.join(",", effectiveDropVersions(variant))
+                + "|level:" + level;
+    }
+
+    private static NpcDropData copyForDisplay(NpcDropData source) {
+        List<DropTableSection> sections = new ArrayList<>();
+        for (DropTableSection section : source.getDropTableSections()) {
+            List<DropItem> items = new ArrayList<>();
+            for (DropItem item : section.getItems()) {
+                items.add(new DropItem(0, item.getName(), item.getRarity()));
+            }
+            sections.add(new DropTableSection(section.getHeader(), items));
+        }
+        return new NpcDropData(source.getNpcId(), source.getName(), source.getLevel(), sections);
+    }
+
+    private static void indexItemName(Map<String, Integer> index, String name, int itemId) {
+        String key = normalizeItemName(name);
+        if (!key.isEmpty() && !"null".equals(key) && !"members object".equals(key)) {
+            index.merge(key, itemId, Math::min);
+        }
+    }
+
+    private static List<String> effectiveDropVersions(WikiMonsterMetadataParser.Variant variant) {
+        if (variant == null) {
+            return Collections.emptyList();
+        }
+
+        List<String> versions = new ArrayList<>(variant.getDropVersions());
+        versions.addAll(variant.getSubNames());
+        return versions;
+    }
+
+    private static int firstNpcId(WikiMonsterMetadataParser.Variant variant) {
+        return variant == null || variant.getNpcIds().isEmpty()
+                ? 0
+                : variant.getNpcIds().iterator().next();
+    }
+
+    private static JsonObject firstQueryPage(String responseBody) {
+        JsonElement parsed = new JsonParser().parse(responseBody);
+        if (!parsed.isJsonObject()) {
+            return null;
+        }
+
+        JsonObject query = parsed.getAsJsonObject().getAsJsonObject("query");
+        JsonArray pages = query == null ? null : query.getAsJsonArray("pages");
+        return pages == null || pages.size() == 0 || !pages.get(0).isJsonObject()
+                ? null
+                : pages.get(0).getAsJsonObject();
+    }
+
+    private static JsonArray bucketRows(String responseBody) {
+        JsonElement parsed = new JsonParser().parse(responseBody);
+        if (!parsed.isJsonObject()) {
+            return new JsonArray();
+        }
+
+        JsonObject root = parsed.getAsJsonObject();
+        String error = WikiDropBucketParser.stringValue(root.get("error"));
+        if (!error.isEmpty()) {
+            throw new IllegalArgumentException("Wiki Bucket query failed: " + error);
+        }
+
+        JsonElement bucket = root.get("bucket");
+        return bucket != null && bucket.isJsonArray() ? bucket.getAsJsonArray() : new JsonArray();
+    }
+
+    private static String apiUrl(String... parameters) {
+        if (parameters.length % 2 != 0) {
+            throw new IllegalArgumentException("API parameters must be key/value pairs");
+        }
+
+        StringJoiner query = new StringJoiner("&", WIKI_API + "?", "");
+        query.add(parameter("format", "json"));
+        query.add(parameter("formatversion", "2"));
+        for (int i = 0; i < parameters.length; i += 2) {
+            query.add(parameter(parameters[i], parameters[i + 1]));
+        }
+        return query.toString();
+    }
+
+    private static String parameter(String key, String value) {
+        return URLEncoder.encode(key, StandardCharsets.UTF_8)
+                + "="
+                + URLEncoder.encode(Objects.toString(value, ""), StandardCharsets.UTF_8);
+    }
+
+    private static String luaString(String value) {
+        String escaped = Objects.toString(value, "")
+                .replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\r", "\\r")
+                .replace("\n", "\\n");
+        return "\"" + escaped + "\"";
+    }
+
+
+    private static boolean sameWikiName(String left, String right) {
+        return normalizeWikiName(left).equals(normalizeWikiName(right));
+    }
+
+    private static String normalizeWikiName(String value) {
+        return sanitizeName(value)
+                .replace('_', ' ')
+                .replaceAll("\\s+", " ")
+                .toLowerCase(Locale.ROOT);
+    }
+
+    private static String sanitizeName(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+
+    private static List<String> itemNameCandidates(String wikiName) {
+        String exact = wikiName == null ? "" : wikiName.trim();
+        if (exact.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        Map<String, String> candidates = new LinkedHashMap<>();
+        candidates.put(normalizeItemName(exact), exact);
+
+        int anchor = exact.indexOf('#');
+        if (anchor >= 0) {
+            String withoutAnchor = exact.replace("#", "");
+            String spacedAnchor = exact.replace("#", " ");
+            String beforeAnchor = exact.substring(0, anchor).trim();
+            candidates.putIfAbsent(normalizeItemName(withoutAnchor), withoutAnchor);
+            candidates.putIfAbsent(normalizeItemName(spacedAnchor), spacedAnchor);
+            candidates.putIfAbsent(normalizeItemName(beforeAnchor), beforeAnchor);
+        }
+        candidates.remove("");
+        return new ArrayList<>(candidates.values());
+    }
+
+    private static String normalizeItemName(String itemName) {
+        return itemName == null
+                ? ""
+                : itemName
+                .replace('\u00A0', ' ')
+                .replace('\u2018', '\'')
+                .replace('\u2019', '\'')
+                .replace('_', ' ')
+                .replaceAll("\\s+", " ")
+                .trim()
+                .toLowerCase(Locale.ROOT);
     }
 
     /**
-     * Asynchronously fetch an NPC's drop table from the wiki.
-     * 1) Download + parse document (BG thread)
-     * 2) Resolve item IDs on client thread using ItemManager.search (canonicalized)
+     * Fetch raw Wiki drop rows. Item IDs are resolved only on the display copy.
      */
-    public CompletableFuture<NpcDropData> fetch(int npcId, String name, int level)
-    {
-        return CompletableFuture.supplyAsync(() -> {
-            String url = buildWikiUrl(npcId, name);
-            String html = fetchHtml(url);
-            Document doc = Jsoup.parse(html);
+    public CompletableFuture<NpcDropData> fetch(int npcId, String name, int level) {
+        return CompletableFuture.supplyAsync(
+                () -> fetchDropData(npcId, name, level),
+                ensureExecutor()
+        );
+    }
 
-            String actualName = name;
-            Element heading = doc.selectFirst("h1#firstHeading");
-            if (heading != null) {
-                actualName = heading.text();
+    /**
+     * Fetch every distinct Wiki monster variant for a page and optional combat
+     * level. This is the search path: it deliberately returns multiple results
+     * when level alone is ambiguous, with each result carrying a concrete NPC ID.
+     */
+    public CompletableFuture<List<NpcDropData>> fetchVariants(String name, int level) {
+        return CompletableFuture.supplyAsync(
+                () -> fetchVariantDropData(name, level),
+                ensureExecutor()
+        );
+    }
+
+    private List<NpcDropData> fetchVariantDropData(String name, int level) {
+        NpcPageReference page = resolveNpcPage(0, name);
+        if (page == null || page.getPageName().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        WikiPageMetadata metadata = loadMetadata(page.getPageName());
+        List<WikiMonsterMetadataParser.Variant> variants = metadata.getMonster().selectVariants(level);
+        if (variants.isEmpty()) {
+            if (level > 0) {
+                return Collections.emptyList();
             }
 
-            int resolvedLevel = level > 0 ? level : parseCombatLevel(doc);
-            int actualId = resolveNpcId(doc);
-            List<DropTableSection> sections = parseSections(doc);
-            if (sections.isEmpty()) {
-                return null; // skip NPCs without drop tables
-            }
-            return new NpcDropData(actualId, actualName, resolvedLevel, sections);
-        }, fetchExecutor).thenCompose(data -> {
-            if (data == null) {
-                return CompletableFuture.completedFuture(null);
+            NpcDropData fallback = fetchDropData(0, page.getPageName(), 0);
+            return fallback == null
+                    ? Collections.emptyList()
+                    : Collections.singletonList(fallback);
+        }
+
+        List<WikiDropBucketParser.BucketDrop> rows = loadDropRows(page.getPageName());
+        Map<String, NpcDropData> distinct = new LinkedHashMap<>();
+
+        for (WikiMonsterMetadataParser.Variant variant : variants) {
+            int resolvedLevel = variant.getCombatLevel() > 0 ? variant.getCombatLevel() : level;
+            if (level > 0 && resolvedLevel != level) {
+                continue;
             }
 
-            CompletableFuture<NpcDropData> resolved = new CompletableFuture<>();
-            clientThread.invoke(() -> {
-                for (DropTableSection sec : data.getDropTableSections()) {
-                    List<DropItem> items = sec.getItems();
-                    for (int i = 0; i < items.size(); i++) {
-                        DropItem d = items.get(i);
-                        d.setItemId(resolveItemId(d.getName()));
+            int resolvedNpcId = firstNpcId(variant);
+            NpcDropData data = buildDropData(
+                    page.getPageName(), metadata, rows, variant, resolvedNpcId, resolvedLevel);
+            if (data != null) {
+                distinct.putIfAbsent(variantIdentity(variant, resolvedNpcId, resolvedLevel), data);
+            }
+        }
+
+        return new ArrayList<>(distinct.values());
+    }
+
+    private NpcDropData fetchDropData(int npcId, String name, int level) {
+        NpcPageReference page = resolveNpcPage(npcId, name);
+        if (page == null || page.getPageName().isEmpty()) {
+            return null;
+        }
+
+        WikiPageMetadata metadata = loadMetadata(page.getPageName());
+        WikiMonsterMetadataParser.Variant variant = metadata.getMonster()
+                .selectVariant(npcId, level, page.getPageSub());
+
+        if (npcId <= 0 && level > 0) {
+            if (variant == null
+                    || (variant.getCombatLevel() > 0 && variant.getCombatLevel() != level)) {
+                return null;
+            }
+        }
+
+        return buildDropData(
+                page.getPageName(), metadata, loadDropRows(page.getPageName()), variant, npcId, level);
+    }
+
+    private NpcDropData buildDropData(
+            String pageName,
+            WikiPageMetadata metadata,
+            List<WikiDropBucketParser.BucketDrop> rows,
+            WikiMonsterMetadataParser.Variant variant,
+            int npcId,
+            int level) {
+        int resolvedLevel = level > 0 ? level : variant == null ? 0 : variant.getCombatLevel();
+        int resolvedNpcId = npcId > 0 ? npcId : firstNpcId(variant);
+        List<String> dropVersions = new ArrayList<>(effectiveDropVersions(variant));
+
+        Set<String> locationVersions = metadata.getLocationDropVersionsByLevel()
+                .getOrDefault(resolvedLevel, Collections.emptySet());
+
+        if (locationVersions.size() == 1) {
+            dropVersions.add(locationVersions.iterator().next());
+        }
+
+        List<DropTableSection> sections = WikiDropBucketParser.selectSections(
+                rows,
+                dropVersions,
+                resolvedLevel,
+                metadata.getDropTableClassification()
+        );
+        return sections.isEmpty()
+                ? null
+                : new NpcDropData(resolvedNpcId, pageName, resolvedLevel, sections);
+    }
+
+    /**
+     * Create a display-only copy, resolve GE-tradeable item IDs on the client
+     * thread, and remove unresolved/untradeable rows. The raw cached data is
+     * never mutated, so a temporarily unavailable item index cannot permanently
+     * erase sections from disk.
+     */
+    CompletableFuture<NpcDropData> resolveForDisplay(NpcDropData source) {
+        if (source == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        NpcDropData display = copyForDisplay(source);
+        CompletableFuture<NpcDropData> future = new CompletableFuture<>();
+        clientThread.invoke(() ->
+        {
+            try {
+                ensureItemIndex();
+
+                for (DropTableSection section : display.getDropTableSections()) {
+                    boolean specialTable = WikiDropBucketParser.isSpecialSection(section.getHeader());
+                    for (DropItem item : section.getItems()) {
+                        item.setItemId(specialTable
+                                ? resolveAnyItemId(item.getName())
+                                : resolveItemId(item.getName()));
                     }
+                    section.getItems().removeIf(item -> item.getItemId() <= 0);
                 }
-                resolved.complete(data);
+                display.getDropTableSections().removeIf(section -> section.getItems().isEmpty());
+                future.complete(display.getDropTableSections().isEmpty() ? null : display);
+            } catch (Throwable ex) {
+                future.completeExceptionally(ex);
+            }
+        });
+        return future;
+    }
+
+    /**
+     * Build the GE-tradeable index used by Chance Man's normal item pool plus a
+     * complete canonical item-definition index for Wiki-generated special tables.
+     * No RDT/GDT item IDs are hardcoded.
+     */
+    private void ensureItemIndex() {
+        if (itemIndexReady) {
+            return;
+        }
+
+        Map<String, Integer> tradeableIndex = new HashMap<>();
+        Map<String, Integer> allIndex = new HashMap<>();
+        for (int itemId = 0; itemId < ITEM_SCAN_LIMIT; itemId++) {
+            try {
+                ItemComposition item = itemManager.getItemComposition(itemId);
+                if (item == null
+                        || item.getNote() != -1
+                        || item.getPlaceholderTemplateId() != -1) {
+                    continue;
+                }
+
+                int canonicalId = itemManager.canonicalize(itemId);
+                indexItemName(allIndex, item.getMembersName(), canonicalId);
+                indexItemName(allIndex, item.getName(), canonicalId);
+
+                if (item.isGeTradeable()) {
+                    indexItemName(tradeableIndex, item.getMembersName(), canonicalId);
+                    indexItemName(tradeableIndex, item.getName(), canonicalId);
+                }
+            } catch (RuntimeException ignored) {
+            }
+        }
+
+        if (tradeableIndex.isEmpty() || allIndex.isEmpty()) {
+            log.warn("RuneLite item definitions are not ready; item indexes will retry");
+            return;
+        }
+
+        itemIdByName.clear();
+        itemIdByName.putAll(tradeableIndex);
+        allItemIdByName.clear();
+        allItemIdByName.putAll(allIndex);
+        itemIndexReady = true;
+        log.warn(
+                "Indexed {} GE-tradeable and {} total RuneScape item names",
+                tradeableIndex.size(),
+                allIndex.size()
+        );
+    }
+
+    private static Map<Integer, Set<String>> locationDropVersionsByLevel(String wikitext) {
+        Map<Integer, Set<String>> byLevel = new LinkedHashMap<>();
+
+        for (WikiTemplateParser.Template location
+                : WikiTemplateParser.findAll(wikitext, "LocLine")) {
+
+            String version = sanitizeName(location.get("dropversion"));
+            if (version.isEmpty()) {
+                continue;
+            }
+
+            String levels = location.get("levels");
+            if (levels.isEmpty()) {
+                levels = location.get("level");
+            }
+
+            for (int level : WikiMonsterMetadataParser.parseIntegers(levels)) {
+                byLevel.computeIfAbsent(level, ignored -> new LinkedHashSet<>())
+                        .add(version);
+            }
+        }
+
+        return byLevel;
+    }
+
+    private WikiPageMetadata loadMetadata(String pageName) {
+        try {
+            return metadataCache.computeIfAbsent(pageName, key -> {
+                String wikitext = fetchRawWikitext(key);
+                return new WikiPageMetadata(
+                        WikiMonsterMetadataParser.parse(wikitext),
+                        WikiDropTableClassifier.parse(wikitext),
+                        locationDropVersionsByLevel(wikitext)
+                );
             });
-            return resolved;
+        } catch (RuntimeException ex) {
+            log.warn("Could not load monster metadata for {}", pageName, ex);
+            return WikiPageMetadata.empty();
+        }
+    }
+
+    private List<WikiDropBucketParser.BucketDrop> loadDropRows(String pageName) {
+        return dropRowsCache.computeIfAbsent(pageName, key -> {
+            String query = "bucket('dropsline')"
+                    + ".select('page_name','page_name_sub','drop_json','rare_drop_table')"
+                    + ".where('page_name'," + luaString(key) + ")"
+                    + ".limit(5000).run()";
+            return Collections.unmodifiableList(
+                    new ArrayList<>(WikiDropBucketParser.parseResponse(executeBucketQuery(query)))
+            );
         });
     }
 
-    /** Resolve an item name to an ID using ItemManager.search only (canonicalized). */
-    private int resolveItemId(String itemName)
-    {
-        if (itemName == null || itemName.isEmpty()) {
-            return 0;
-        }
-        String lower = itemName.trim().toLowerCase(Locale.ROOT);
-        if ("nothing".equals(lower) || "unknown".equals(lower)) {
-            return 0;
-        }
-
-        try {
-            List<ItemPrice> results = itemManager.search(itemName);
-            for (int j = 0; j < results.size(); j++) {
-                int id = results.get(j).getId();
-                ItemComposition comp = itemManager.getItemComposition(id);
-                if (comp != null && comp.getName() != null && comp.getName().equalsIgnoreCase(itemName)) {
-                    return itemManager.canonicalize(id);
+    private NpcPageReference resolveNpcPage(int npcId, String suppliedName) {
+        String name = sanitizeName(suppliedName);
+        if (npcId > 0) {
+            try {
+                NpcPageReference page = resolveNpcPageFromBucket(npcId, name);
+                if (page != null) {
+                    return page;
                 }
+            } catch (RuntimeException ex) {
+                log.warn("NPC ID Bucket lookup failed for {}", npcId, ex);
             }
-        } catch (Exception ex) {
-            // ignore; fall through
         }
-
-        return 0;
+        return name.isEmpty() ? null : new NpcPageReference(resolveCanonicalTitle(name), "");
     }
 
-    /** Extract drop table sections (skips Nothing rows). */
-    private List<DropTableSection> parseSections(Document doc)
-    {
-        Elements tables = doc.select("table.item-drops");
-        List<DropTableSection> sections = new ArrayList<>();
+    private NpcPageReference resolveNpcPageFromBucket(int npcId, String suppliedName) {
+        String query = "bucket('npc_id')"
+                + ".select('page_name','page_name_sub')"
+                + ".where('id'," + npcId + ")"
+                + ".limit(20).run()";
 
-        for (Element table : tables)
-        {
-            Map<String, Integer> col = buildColumnIndexMap(table);
-
-            Integer itemCol = col.get("item");
-            Integer rarityCol = col.get("rarity");
-            if (itemCol == null || rarityCol == null)
-            {
-                continue; // table not understood
+        NpcPageReference first = null;
+        for (JsonElement element : bucketRows(executeBucketQuery(query))) {
+            if (!element.isJsonObject()) {
+                continue;
             }
 
-            String header = findSectionHeader(table);
-
-            List<DropItem> items = new ArrayList<>();
-            Elements rows = table.select("tbody > tr");
-
-            for (Element row : rows)
-            {
-                // Skip header-like rows inside tbody
-                if (!row.select("th").isEmpty())
-                {
-                    continue;
-                }
-
-                Elements tds = row.select("td");
-                if (itemCol >= tds.size())
-                {
-                    continue;
-                }
-
-                Element itemTd = tds.get(itemCol);
-
-                String name = extractItemName(itemTd);
-                if (name.isEmpty() || name.equalsIgnoreCase("nothing"))
-                {
-                    continue;
-                }
-
-                String rarity = "";
-                if (rarityCol < tds.size())
-                {
-                    rarity = extractRarity(tds.get(rarityCol));
-                }
-                else
-                {
-                    // Fallback: locate a cell containing the new rarity spans
-                    Element rarityTd = row.selectFirst("td:has(span[data-drop-fraction]), td:has(span[data-drop-oneover])");
-                    if (rarityTd != null)
-                    {
-                        rarity = extractRarity(rarityTd);
-                    }
-                }
-
-                items.add(new DropItem(0, name, rarity));
+            JsonObject row = element.getAsJsonObject();
+            String pageName = WikiDropBucketParser.stringValue(row.get("page_name"));
+            if (pageName.isEmpty()) {
+                continue;
             }
 
-            if (!items.isEmpty())
-            {
-                sections.add(new DropTableSection(header, items));
+            NpcPageReference candidate = new NpcPageReference(
+                    pageName,
+                    WikiDropBucketParser.extractPageSub(pageName, WikiDropBucketParser.stringValue(row.get("page_name_sub")))
+            );
+            if (first == null) {
+                first = candidate;
+            }
+            if (!suppliedName.isEmpty() && sameWikiName(pageName, suppliedName)) {
+                return candidate;
             }
         }
-
-        return sections;
+        return first;
     }
 
-    /** Find the nearest section header preceding the table (supports mw-heading wrappers). */
-    private String findSectionHeader(Element table)
-    {
-        Element prev = table.previousElementSibling();
-        while (prev != null)
-        {
-            if (prev.is("h2,h3,h4"))
-            {
-                String txt = prev.text().trim();
-                return txt.isEmpty() ? "Drops" : txt;
-            }
-
-            if (prev.hasClass("mw-heading"))
-            {
-                Element h = prev.selectFirst("h2,h3,h4");
-                if (h != null)
-                {
-                    String txt = h.text().trim();
-                    return txt.isEmpty() ? "Drops" : txt;
-                }
-            }
-
-            prev = prev.previousElementSibling();
-        }
-        return "Drops";
+    private String resolveCanonicalTitle(String title) {
+        JsonObject page = firstQueryPage(executeGet(apiUrl(
+                "action", "query",
+                "redirects", "1",
+                "titles", title
+        )));
+        String canonical = page == null ? "" : WikiDropBucketParser.stringValue(page.get("title"));
+        return canonical.isEmpty() ? title : canonical;
     }
 
-    /** Build a normalized map of column name -> index from the table header row. */
-    private Map<String, Integer> buildColumnIndexMap(Element table)
-    {
-        Map<String, Integer> map = new HashMap<>();
-
-        Element headerRow = table.selectFirst("tr:has(th)");
-        if (headerRow == null)
-        {
-            return map;
+    private String fetchRawWikitext(String pageName) {
+        JsonObject page = firstQueryPage(executeGet(apiUrl(
+                "action", "query",
+                "redirects", "1",
+                "prop", "revisions",
+                "titles", pageName,
+                "rvprop", "content",
+                "rvslots", "main"
+        )));
+        if (page == null) {
+            return "";
         }
 
-        Elements ths = headerRow.select("th");
-        for (int i = 0; i < ths.size(); i++)
-        {
-            Element th = ths.get(i);
-
-            // OSRS wiki uses class "item-col" on the Item column header
-            if (th.hasClass("item-col"))
-            {
-                map.put("item", i);
-            }
-
-            String key = normalizeHeader(th.text());
-            if (!key.isEmpty())
-            {
-                map.put(key, i);
-            }
+        JsonArray revisions = page.getAsJsonArray("revisions");
+        if (revisions == null || revisions.size() == 0 || !revisions.get(0).isJsonObject()) {
+            return "";
         }
 
-        return map;
+        JsonObject revision = revisions.get(0).getAsJsonObject();
+        JsonObject slots = revision.getAsJsonObject("slots");
+        JsonObject main = slots == null ? null : slots.getAsJsonObject("main");
+        if (main != null) {
+            String content = WikiDropBucketParser.stringValue(main.get("content"));
+            return content.isEmpty() ? WikiDropBucketParser.stringValue(main.get("*")) : content;
+        }
+        return WikiDropBucketParser.stringValue(revision.get("*"));
     }
 
-    private String normalizeHeader(String s)
-    {
-        if (s == null) return "";
-        String t = s.trim().toLowerCase(Locale.ROOT);
-        if (t.isEmpty()) return "";
-
-        if (t.contains("item")) return "item";
-        if (t.contains("rarity")) return "rarity";
-        return "";
+    private String executeBucketQuery(String query) {
+        return executeGet(apiUrl("action", "bucket", "query", query));
     }
 
-    /** Extract item name from the item cell. */
-    private String extractItemName(Element itemTd)
-    {
-        if (itemTd == null) return "";
-
-        Element a = itemTd.selectFirst("a.itemlink[title], a[title]");
-        if (a != null)
-        {
-            String title = a.attr("title");
-            if (title != null && !title.trim().isEmpty())
-            {
-                return title.trim();
-            }
-        }
-
-        return itemTd.text().replace("(m)", "").trim();
-    }
-
-    /** Extract rarity from data-drop-* spans. */
-    private String extractRarity(Element rarityTd)
-    {
-        if (rarityTd == null) return "";
-
-        Elements spans = rarityTd.select("span[data-drop-fraction], span[data-drop-oneover]");
-        if (!spans.isEmpty())
-        {
-            List<String> parts = new ArrayList<>();
-            for (Element sp : spans)
-            {
-                String v = sp.hasAttr("data-drop-fraction") ? sp.attr("data-drop-fraction") : "";
-                if (v == null || v.isEmpty())
-                {
-                    v = sp.hasAttr("data-drop-oneover") ? sp.attr("data-drop-oneover") : "";
-                }
-
-                String txt = (v != null && !v.isEmpty()) ? v : sp.text();
-                txt = txt.replace(",", "").trim();
-                if (!txt.isEmpty())
-                {
-                    parts.add(txt);
-                }
-            }
-
-            if (parts.isEmpty())
-            {
-                return "";
-            }
-            if (parts.size() == 1)
-            {
-                return parts.get(0);
-            }
-            if (parts.size() == 2)
-            {
-                return parts.get(0) + "–" + parts.get(1);
-            }
-            return String.join("; ", parts);
-        }
-
-        // Fallback
-        String own = rarityTd.ownText();
-        if (own != null && !own.trim().isEmpty())
-        {
-            return own.trim();
-        }
-        return rarityTd.text().trim();
-    }
-
-    /** Attempt to parse the combat level from the NPC infobox. */
-    private int parseCombatLevel(Document doc)
-    {
-        Element infobox = doc.selectFirst("table.infobox");
-        if (infobox == null)
-        {
-            return 0;
-        }
-        Elements rows = infobox.select("tr");
-        for (Element row : rows)
-        {
-            Element th = row.selectFirst("th");
-            Element td = row.selectFirst("td");
-            if (th != null && td != null) {
-                String thText = th.text();
-                if (thText != null && thText.toLowerCase(Locale.ROOT).contains("combat level")) {
-                    String txt = td.text();
-                    String[] parts = txt.split("[^0-9]+");
-                    for (String part : parts) {
-                        if (part != null && part.length() > 0) {
-                            try {
-                                return Integer.parseInt(part);
-                            } catch (NumberFormatException nfe) {
-                                log.warn("Failed to parse combat level: {}", txt);
-                            }
-                        }
-                    }
-                }
-            }
-        }
-        return 0;
-    }
-
-    /** Resolve the canonical wiki page ID for the provided document. */
-    private int resolveNpcId(Document doc)
-    {
-        Element link = doc.selectFirst("link[rel=canonical]");
-        if (link == null)
-        {
-            return 0;
-        }
-
-        String href = link.attr("href");
-        if (href == null || href.isEmpty())
-        {
-            return 0;
-        }
-
-        // Strip query / fragment just in case the canonical ever includes them.
-        int q = href.indexOf('?');
-        if (q >= 0) href = href.substring(0, q);
-        int h = href.indexOf('#');
-        if (h >= 0) href = href.substring(0, h);
-
-        String title = href.substring(href.lastIndexOf('/') + 1);
-        title = URLDecoder.decode(title, StandardCharsets.UTF_8);
-        title = title.replace(' ', '_');
-        String apiUrl = "https://oldschool.runescape.wiki/api.php?action=query&format=json&prop=info&titles="
-                + URLEncoder.encode(title, StandardCharsets.UTF_8);
-
-        Request req = new Request.Builder()
-                .url(apiUrl)
+    private String executeGet(String url) {
+        Request request = new Request.Builder()
+                .url(url)
                 .header("User-Agent", USER_AGENT)
                 .build();
 
-        try (Response res = httpClient.newCall(req).execute())
-        {
-            if (!res.isSuccessful())
-            {
-                log.warn("Failed to resolve NPC ID for {}: HTTP {}", title, res.code());
+        try (Response response = httpClient.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                throw new IOException("HTTP " + response.code() + " for " + response.request().url());
+            }
+            ResponseBody body = response.body();
+            if (body == null) {
+                throw new IOException("Empty response body for " + response.request().url());
+            }
+            return body.string();
+        } catch (IOException ex) {
+            throw new UncheckedIOException(ex);
+        }
+    }
+
+    /**
+     * Resolve any concrete RuneLite item by its Wiki display name.
+     */
+    private int resolveAnyItemId(String wikiName) {
+        for (String candidate : itemNameCandidates(wikiName)) {
+            Integer cached = allItemIdByName.get(normalizeItemName(candidate));
+            if (cached != null && cached > 0) {
+                return cached;
+            }
+        }
+
+        return resolveItemId(wikiName);
+    }
+
+    /**
+     * Resolve only player-tradeable items through RuneLite's item-price search.
+     */
+    private int resolveItemId(String wikiName) {
+        for (String candidate : itemNameCandidates(wikiName)) {
+            String key = normalizeItemName(candidate);
+            Integer cached = itemIdByName.get(key);
+            if (cached != null) {
+                return cached;
+            }
+
+            int resolved = searchTradeableItem(candidate, key);
+            if (resolved > 0) {
+                itemIdByName.put(key, resolved);
+                return resolved;
+            }
+        }
+        return 0;
+    }
+
+    private int searchTradeableItem(String candidate, String normalizedCandidate) {
+        try {
+            List<ItemPrice> results = itemManager.search(candidate);
+            if (results == null) {
                 return 0;
             }
 
-            String body = res.body().string();
-            JsonElement root = new JsonParser().parse(body);
-            JsonElement pages = root.getAsJsonObject()
-                    .getAsJsonObject("query")
-                    .getAsJsonObject("pages");
+            for (ItemPrice result : results) {
+                ItemComposition item = itemManager.getItemComposition(result.getId());
+                if (item == null || !item.isGeTradeable()) {
+                    continue;
+                }
 
-            for (Map.Entry<String, JsonElement> entry : pages.getAsJsonObject().entrySet())
-            {
-                JsonElement page = entry.getValue();
-                if (page.getAsJsonObject().has("pageid"))
-                {
-                    return page.getAsJsonObject().get("pageid").getAsInt();
+                String itemName = item.getMembersName();
+                if (itemName == null || itemName.trim().isEmpty()) {
+                    itemName = item.getName();
+                }
+
+                if (normalizedCandidate.equals(normalizeItemName(itemName))) {
+                    return itemManager.canonicalize(result.getId());
                 }
             }
-
-            log.warn("No page ID found for title {}", title);
-        }
-        catch (IOException ex)
-        {
-            log.warn("Error resolving NPC ID for {}", title, ex);
+        } catch (RuntimeException ex) {
+            log.warn("Could not resolve Wiki drop item {}", candidate, ex);
         }
         return 0;
     }
 
-    /** Query the wiki's search API for NPC names matching the provided text. */
-    public List<String> searchNpcNames(String query)
-    {
-        String url = "https://oldschool.runescape.wiki/api.php?action=opensearch&format=json&limit=20&namespace=0&search="
-                + URLEncoder.encode(query, StandardCharsets.UTF_8);
-        Request req = new Request.Builder()
-                .url(url)
-                .header("User-Agent", USER_AGENT)
-                .build();
-        try (Response res = httpClient.newCall(req).execute())
-        {
-            if (!res.isSuccessful())
-            {
-                throw new IOException("HTTP " + res.code());
-            }
-            String body = res.body().string();
-            JsonArray arr = new JsonParser().parse(body).getAsJsonArray();
-            JsonArray titles = arr.get(1).getAsJsonArray();
-            List<String> names = new ArrayList<>();
-            for (int i = 0; i < titles.size(); i++) {
-                names.add(titles.get(i).getAsString());
-            }
-            return names;
+    public List<String> searchNpcNames(String query) {
+        JsonArray response = new JsonParser().parse(executeGet(apiUrl(
+                "action", "opensearch",
+                "limit", "20",
+                "namespace", "0",
+                "search", query == null ? "" : query
+        ))).getAsJsonArray();
+
+        if (response.size() < 2 || !response.get(1).isJsonArray()) {
+            return Collections.emptyList();
         }
-        catch (IOException ex)
-        {
-            throw new UncheckedIOException(ex);
+
+        List<String> names = new ArrayList<>();
+        for (JsonElement title : response.get(1).getAsJsonArray()) {
+            names.add(title.getAsString());
         }
+        return names;
     }
 
-    private String buildWikiUrl(int npcId, String name)
-    {
-        String fallback = URLEncoder.encode(name.replace(' ', '_'), StandardCharsets.UTF_8);
-        StringBuilder url = new StringBuilder("https://oldschool.runescape.wiki/w/Special:Lookup?type=npc");
-
-        if (npcId > 0)
-        {
-            url.append("&id=").append(npcId);
-        }
-
-        if (!fallback.isEmpty())
-        {
-            url.append("&name=").append(fallback);
-        }
-
-        url.append("#Drops");
-        return url.toString();
+    public void startUp() {
+        ensureExecutor();
     }
 
-    private String fetchHtml(String url)
-    {
-        Request req = new Request.Builder()
-                .url(url)
-                .header("User-Agent", USER_AGENT)
-                .build();
-        try (Response res = httpClient.newCall(req).execute())
-        {
-            if (!res.isSuccessful()) throw new IOException("HTTP " + res.code());
-            return res.body().string();
-        }
-        catch (IOException ex)
-        {
-            throw new UncheckedIOException(ex);
-        }
-    }
-
-    /** Creates the fetch executor if it is missing or has been shut down. */
-    public void startUp()
-    {
-        if (fetchExecutor == null || fetchExecutor.isShutdown() || fetchExecutor.isTerminated())
-        {
+    private synchronized ExecutorService ensureExecutor() {
+        if (fetchExecutor == null || fetchExecutor.isShutdown() || fetchExecutor.isTerminated()) {
             fetchExecutor = Executors.newFixedThreadPool(
                     4,
                     new ThreadFactoryBuilder().setNameFormat("dropfetch-%d").build()
             );
         }
+        return fetchExecutor;
     }
 
-    /** Shut down the executor service. */
-    public void shutdown()
-    {
-        if (fetchExecutor != null)
-        {
+    public synchronized void shutdown() {
+        if (fetchExecutor != null) {
             fetchExecutor.shutdownNow();
             fetchExecutor = null;
+        }
+        metadataCache.clear();
+        dropRowsCache.clear();
+        itemIdByName.clear();
+        allItemIdByName.clear();
+        itemIndexReady = false;
+    }
+
+    @Value
+    private static class WikiPageMetadata {
+        WikiMonsterMetadataParser.ParsedMonster monster;
+        WikiDropTableClassifier.Classification dropTableClassification;
+        Map<Integer, Set<String>> locationDropVersionsByLevel;
+
+        static WikiPageMetadata empty() {
+            return new WikiPageMetadata(
+                    WikiMonsterMetadataParser.ParsedMonster.empty(),
+                    WikiDropTableClassifier.Classification.empty(),
+                    Collections.emptyMap()
+            );
+        }
+    }
+
+    @Value
+    private static class NpcPageReference {
+        String pageName;
+        String pageSub;
+
+        NpcPageReference(String pageName, String pageSub) {
+            this.pageName = sanitizeName(pageName);
+            this.pageSub = sanitizeName(pageSub);
         }
     }
 }

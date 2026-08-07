@@ -1,5 +1,6 @@
 package com.chanceman.drops;
 
+import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -11,31 +12,24 @@ import java.util.stream.Collectors;
 
 @Setter
 @Getter
-public class DropItem
-{
+@AllArgsConstructor
+public class DropItem {
+    // Anchored patterns for correctness & speed
+    private static final Pattern PCT = Pattern.compile("^(\\d+(?:\\.\\d+)?)%$");
+    private static final Pattern MULT = Pattern.compile("^(\\d+(?:\\.\\d+)?)\\s*[xX]\\s*(\\d+(?:\\.\\d+)?)\\s*/\\s*(\\d+(?:\\.\\d+)?)$");
+    private static final Pattern FRAC = Pattern.compile("^(\\d+(?:\\.\\d+)?)\\s*/\\s*(\\d+(?:\\.\\d+)?)$");
+    private static final Pattern PAREN = Pattern.compile("\\s*\\([^)]*\\)$", Pattern.UNICODE_CASE);
+    private static final Pattern IN_SYNT = Pattern.compile("\\bin\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern BRACKETS = Pattern.compile("\\[[^\\]]*\\]");
+    private static final Pattern ONE_OVER = Pattern.compile("1/(\\d+(?:\\.\\d+)?)");
     private int itemId;
     private String name;
     private String rarity;
 
-    // Anchored patterns for correctness & speed
-    private static final Pattern PCT       = Pattern.compile("^(\\d+(?:\\.\\d+)?)%$");
-    private static final Pattern MULT      = Pattern.compile("^(\\d+(?:\\.\\d+)?)\\s*[xX]\\s*(\\d+(?:\\.\\d+)?)\\s*/\\s*(\\d+(?:\\.\\d+)?)$");
-    private static final Pattern FRAC      = Pattern.compile("^(\\d+(?:\\.\\d+)?)\\s*/\\s*(\\d+(?:\\.\\d+)?)$");
-    private static final Pattern PAREN     = Pattern.compile("\\s*\\([^)]*\\)$", Pattern.UNICODE_CASE);
-    private static final Pattern IN_SYNT   = Pattern.compile("\\bin\\b", Pattern.CASE_INSENSITIVE);
-    private static final Pattern BRACKETS  = Pattern.compile("\\[[^\\]]*\\]");
-    private static final Pattern ONE_OVER  = Pattern.compile("1/(\\d+(?:\\.\\d+)?)");
-
-    public DropItem(int itemId, String name, String rarity)
-    {
-        this.itemId = itemId;
-        this.name = name;
-        this.rarity = rarity;
-    }
-
-    /** Convert raw rarity to normalized one-over form (preserves ranges like “1/64–1/32”). */
-    public String getOneOverRarity()
-    {
+    /**
+     * Convert raw rarity to normalized one-over form (preserves ranges like “1/64–1/32”).
+     */
+    public String getOneOverRarity() {
         if (rarity == null) return "";
         String[] parts = rarity.split("\\s*;\\s*|,\\s+");
         return Arrays.stream(parts)
@@ -47,31 +41,29 @@ public class DropItem
      * Parse rarity and return the denominator (e.g., “1/128” -> 128).
      * Unknown values sort as rarest (POSITIVE_INFINITY). “Always” -> 0.
      */
-    public double getRarityValue()
-    {
+    public double getRarityValue() {
         String oneOver = getOneOverRarity();
-        if (oneOver.isEmpty())
-        {
+        if (oneOver.isEmpty()) {
             return Double.POSITIVE_INFINITY;
         }
 
         Matcher m = ONE_OVER.matcher(oneOver);
-        if (m.find())
-        {
-            try { return Double.parseDouble(m.group(1)); }
-            catch (NumberFormatException ignored) { return Double.POSITIVE_INFINITY; }
+        if (m.find()) {
+            try {
+                return Double.parseDouble(m.group(1));
+            } catch (NumberFormatException ignored) {
+                return Double.POSITIVE_INFINITY;
+            }
         }
 
-        if (oneOver.equalsIgnoreCase("Always"))
-        {
+        if (oneOver.equalsIgnoreCase("Always")) {
             return 0d;
         }
 
         return Double.POSITIVE_INFINITY;
     }
 
-    private String normalizeSegment(String raw)
-    {
+    private String normalizeSegment(String raw) {
         String cleaned = raw == null ? "" : raw;
         cleaned = BRACKETS.matcher(cleaned).replaceAll("");
         cleaned = cleaned
@@ -85,8 +77,7 @@ public class DropItem
 
         // Handle ranges like "1/128 – 1/64"
         String[] range = cleaned.split("\\s*[–—-]\\s*");
-        if (range.length > 1)
-        {
+        if (range.length > 1) {
             return Arrays.stream(range)
                     .map(this::simplifySingle)
                     .collect(Collectors.joining("–"));
@@ -95,10 +86,8 @@ public class DropItem
         return simplifySingle(cleaned);
     }
 
-    private String simplifySingle(String s)
-    {
-        if (s == null || s.isEmpty())
-        {
+    private String simplifySingle(String s) {
+        if (s == null || s.isEmpty()) {
             return "";
         }
 
@@ -106,8 +95,7 @@ public class DropItem
 
         // 12.5%
         m = PCT.matcher(s);
-        if (m.matches())
-        {
+        if (m.matches()) {
             double pct = safeDouble(m.group(1));
             if (pct == 0) return "0";
             return formatOneOver(100.0 / pct);
@@ -115,25 +103,21 @@ public class DropItem
 
         // 2 x 1 / 128
         m = MULT.matcher(s);
-        if (m.matches())
-        {
+        if (m.matches()) {
             double factor = safeDouble(m.group(1));
             double a = safeDouble(m.group(2));
             double b = safeDouble(m.group(3));
-            if (factor != 0 && a != 0)
-            {
+            if (factor != 0 && a != 0) {
                 return formatOneOver(b / (a * factor));
             }
         }
 
         // 1/128
         m = FRAC.matcher(s);
-        if (m.matches())
-        {
+        if (m.matches()) {
             double a = safeDouble(m.group(1));
             double b = safeDouble(m.group(2));
-            if (a != 0)
-            {
+            if (a != 0) {
                 return formatOneOver(b / a);
             }
         }
@@ -142,20 +126,19 @@ public class DropItem
         return s;
     }
 
-    private double safeDouble(String s)
-    {
-        try { return Double.parseDouble(s); }
-        catch (Exception e) { return Double.NaN; }
+    private double safeDouble(String s) {
+        try {
+            return Double.parseDouble(s);
+        } catch (Exception e) {
+            return Double.NaN;
+        }
     }
 
-    private String formatOneOver(double val)
-    {
-        if (Double.isNaN(val) || Double.isInfinite(val))
-        {
+    private String formatOneOver(double val) {
+        if (Double.isNaN(val) || Double.isInfinite(val)) {
             return "";
         }
-        if (Math.abs(val - Math.round(val)) < 0.01)
-        {
+        if (Math.abs(val - Math.round(val)) < 0.01) {
             return "1/" + Math.round(val);
         }
         return String.format(Locale.ROOT, "1/%.2f", val);

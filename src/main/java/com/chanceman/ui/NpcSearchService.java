@@ -2,24 +2,32 @@ package com.chanceman.ui;
 
 import com.chanceman.drops.DropCache;
 import com.chanceman.drops.NpcDropData;
+import lombok.RequiredArgsConstructor;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
-import java.util.concurrent.CompletableFuture;
 
 /**
- * Provides fuzzy search over available NPC drop data. The cache is consulted
- * first and any misses fall back to a wiki lookup. Results without drop tables
- * are discarded and lookups for multiple candidates are performed in parallel
- * to keep searches snappy.
+ * Provides fuzzy search over available NPC drop data. Level-qualified searches
+ * preserve exact Wiki variants instead of collapsing NPCs that share a name and
+ * combat level.
  */
 @Singleton
-public class NpcSearchService
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class NpcSearchService {
+    private static final Pattern ID_PATTERN = Pattern.compile("^\\d+$");
     private static final Pattern ID_LEVEL_PATTERN = Pattern.compile("^(\\d+)\\s+(?:lvl|level)?\\s*(\\d+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern NAME_LVL_PATTERN = Pattern.compile("^(.*)\\s+(?:lvl|level)\\s*(\\d+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern LVL_NAME_PATTERN = Pattern.compile("^(?:lvl|level)\\s*(\\d+)\\s+(.*)$", Pattern.CASE_INSENSITIVE);
@@ -28,165 +36,158 @@ public class NpcSearchService
 
     private final DropCache dropCache;
 
-    @Inject
-    public NpcSearchService(DropCache dropCache)
-    {
-        this.dropCache = dropCache;
-    }
+    private static ParsedQuery parse(String q) {
+        if (q == null) {
+            return null;
+        }
 
-    private static class ParsedQuery
-    {
-        Integer npcId;
-        Integer level;
-        String  name;
-    }
-
-    private static ParsedQuery parse(String q)
-    {
-        if (q == null) return null;
         String lower = q.trim().toLowerCase(Locale.ROOT);
-        if (lower.isEmpty()) return null;
+        if (lower.isEmpty()) {
+            return null;
+        }
 
         ParsedQuery pq = new ParsedQuery();
         Matcher m;
 
-        // pure ID
-        if (lower.matches("\\d+"))
-        {
+        if (ID_PATTERN.matcher(lower).matches()) {
             pq.npcId = Integer.valueOf(lower);
             return pq;
         }
-        // ID + level
-        if ((m = ID_LEVEL_PATTERN.matcher(lower)).matches())
-        {
+
+        if ((m = ID_LEVEL_PATTERN.matcher(lower)).matches()) {
             pq.npcId = Integer.valueOf(m.group(1));
             pq.level = Integer.valueOf(m.group(2));
             return pq;
         }
-        // name + level
-        if ((m = NAME_LVL_PATTERN.matcher(lower)).matches())
-        {
-            pq.name  = m.group(1).trim();
+
+        if ((m = NAME_LVL_PATTERN.matcher(lower)).matches()) {
+            pq.name = m.group(1).trim();
             pq.level = Integer.valueOf(m.group(2));
-            return pq;
-        }
-        // level + name
-        if ((m = LVL_NAME_PATTERN.matcher(lower)).matches())
-        {
-            pq.level = Integer.valueOf(m.group(1));
-            pq.name  = m.group(2).trim();
-            return pq;
-        }
-        // trailing number = level
-        if ((m = NAME_NUM_PATTERN.matcher(lower)).matches())
-        {
-            pq.name  = m.group(1).trim();
-            pq.level = Integer.valueOf(m.group(2));
-            return pq;
-        }
-        // leading number = level
-        if ((m = NUM_NAME_PATTERN.matcher(lower)).matches())
-        {
-            pq.level = Integer.valueOf(m.group(1));
-            pq.name  = m.group(2).trim();
             return pq;
         }
 
-        // fallback to pure name
+        if ((m = LVL_NAME_PATTERN.matcher(lower)).matches()) {
+            pq.level = Integer.valueOf(m.group(1));
+            pq.name = m.group(2).trim();
+            return pq;
+        }
+
+        if ((m = NAME_NUM_PATTERN.matcher(lower)).matches()) {
+            pq.name = m.group(1).trim();
+            pq.level = Integer.valueOf(m.group(2));
+            return pq;
+        }
+
+        if ((m = NUM_NAME_PATTERN.matcher(lower)).matches()) {
+            pq.level = Integer.valueOf(m.group(1));
+            pq.name = m.group(2).trim();
+            return pq;
+        }
+
         pq.name = lower;
         return pq;
     }
 
+    private static List<NpcDropData> deduplicateExactResults(List<NpcDropData> results) {
+        Map<String, NpcDropData> unique = new LinkedHashMap<>();
+        for (NpcDropData data : results) {
+            if (data == null || data.getDropTableSections() == null || data.getDropTableSections().isEmpty()) {
+                continue;
+            }
+
+            String key = data.getNpcId() > 0
+                    ? "id:" + data.getNpcId()
+                    : "name:" + Objects.toString(data.getName(), "").toLowerCase(Locale.ROOT)
+                    + "|level:" + data.getLevel();
+            unique.putIfAbsent(key, data);
+        }
+        return new ArrayList<>(unique.values());
+    }
+
+    private static int levenshtein(String a, String b) {
+        int[] cost = new int[b.length() + 1];
+        for (int j = 0; j < cost.length; j++) {
+            cost[j] = j;
+        }
+        for (int i = 1; i <= a.length(); i++) {
+            int diagonal = cost[0];
+            cost[0] = i;
+            for (int j = 1; j <= b.length(); j++) {
+                int previous = cost[j];
+                cost[j] = Math.min(
+                        Math.min(cost[j] + 1, cost[j - 1] + 1),
+                        diagonal + (a.charAt(i - 1) == b.charAt(j - 1) ? 0 : 1)
+                );
+                diagonal = previous;
+            }
+        }
+        return cost[b.length()];
+    }
+
     /**
-     * Search by partial name, level, or ID. Results are limited and ordered by
-     * Levenshtein distance when appropriate.
+     * Search by partial name, level, or ID. Same-name/same-level Wiki variants
+     * are returned as separate NpcDropData results with their own NPC IDs.
      */
-    public List<NpcDropData> search(String query)
-    {
+    public List<NpcDropData> search(String query) {
         ParsedQuery pq = parse(query);
-        if (pq == null)
-        {
+        if (pq == null) {
             return Collections.emptyList();
         }
 
-        // 1) name only → fetch all candidates by name
-        if (pq.npcId == null && pq.level == null && pq.name != null)
-        {
-            List<String> names = dropCache.searchNpcNames(pq.name).join();
-            List<NpcDropData> fetched = fetchAll(names.stream().limit(10).collect(Collectors.toList()), 0);
-            return fetched.stream()
-                    .sorted(Comparator.comparingInt(d ->
-                            levenshtein(d.getName().toLowerCase(Locale.ROOT), pq.name)))
-                    .collect(Collectors.toList());
-        }
-
-        // 2) ID only → fetch by ID
-        if (pq.npcId != null && pq.name == null)
-        {
-            int lvl = (pq.level != null ? pq.level : 0);
-            NpcDropData d = dropCache.get(pq.npcId, "", lvl).join();
-            if (d == null || d.getDropTableSections().isEmpty())
-            {
+        if (pq.npcId != null && pq.name == null) {
+            int lvl = pq.level != null ? pq.level : 0;
+            NpcDropData data = dropCache.get(pq.npcId, "", lvl).join();
+            if (data == null || data.getDropTableSections().isEmpty()) {
                 return Collections.emptyList();
             }
-            return Collections.singletonList(d);
+            return Collections.singletonList(data);
         }
 
-        // 3) mixed or partial → fuzzy search
-        String nameFilter = (pq.name != null ? pq.name : "");
-        int lvlFilter = (pq.level != null ? pq.level : -1);
+        String nameFilter = pq.name;
+        int levelFilter = pq.level == null ? 0 : pq.level;
 
-        List<String> candidates = dropCache.searchNpcNames(nameFilter).join();
-        List<NpcDropData> all = fetchAll(candidates.stream().limit(10).collect(Collectors.toList()),
-                lvlFilter > -1 ? lvlFilter : 0);
+        List<String> candidateNames = dropCache.searchNpcNames(nameFilter).join();
+        List<NpcDropData> results = fetchAllVariants(
+                candidateNames.stream().limit(10).collect(Collectors.toList()),
+                levelFilter
+        );
 
-        // if ID also provided, filter it
-        if (pq.npcId != null)
-        {
-            all = all.stream()
-                    .filter(d -> d.getNpcId() == pq.npcId)
-                    .collect(Collectors.toList());
-        }
-
-        // filter by level + sort by name distance
-        final int lvl = lvlFilter;
-        return all.stream()
-                .filter(d -> lvl < 0 || d.getLevel() == lvl)
-                .sorted(Comparator.comparingInt(d ->
-                        levenshtein(d.getName().toLowerCase(Locale.ROOT), nameFilter)))
+        return deduplicateExactResults(results).stream()
+                .filter(data -> levelFilter <= 0 || data.getLevel() == levelFilter)
+                .sorted(Comparator
+                        .comparingInt((NpcDropData data) -> levenshtein(
+                                data.getName().toLowerCase(Locale.ROOT),
+                                nameFilter
+                        ))
+                        .thenComparingInt(NpcDropData::getLevel)
+                        .thenComparingInt(NpcDropData::getNpcId))
                 .collect(Collectors.toList());
     }
 
     /**
-     * Fetch drop data for a list of names concurrently.
+     * Persist the one search result the user actually chose. This deliberately
+     * happens after selection so merely searching never populates the disk cache.
      */
-    private List<NpcDropData> fetchAll(List<String> names, int level)
-    {
-        List<CompletableFuture<NpcDropData>> futures = names.stream()
-                .map(n -> dropCache.get(0, n, level))
+    public CompletableFuture<Void> cacheSelected(NpcDropData selected) {
+        return dropCache.cacheSelected(selected);
+    }
+
+    /**
+     * Fetch all concrete variants for each candidate page concurrently.
+     */
+    private List<NpcDropData> fetchAllVariants(List<String> names, int level) {
+        List<CompletableFuture<List<NpcDropData>>> futures = names.stream()
+                .map(name -> dropCache.searchNpcVariants(name, level))
                 .collect(Collectors.toList());
-
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
         return futures.stream()
-                .map(CompletableFuture::join)
-                .filter(Objects::nonNull)
-                .filter(d -> !d.getDropTableSections().isEmpty())
+                .flatMap(future -> future.join().stream())
                 .collect(Collectors.toList());
     }
 
-    // simple DP Levenshtein
-    private static int levenshtein(String a, String b)
-    {
-        int[][] dp = new int[a.length()+1][b.length()+1];
-        for (int i = 0; i <= a.length(); i++) dp[i][0] = i;
-        for (int j = 0; j <= b.length(); j++) dp[0][j] = j;
-        for (int i = 1; i <= a.length(); i++)
-            for (int j = 1; j <= b.length(); j++)
-                dp[i][j] = Math.min(
-                        Math.min(dp[i-1][j] + 1, dp[i][j-1] + 1),
-                        dp[i-1][j-1] + (a.charAt(i-1)==b.charAt(j-1) ? 0 : 1)
-                );
-        return dp[a.length()][b.length()];
+    private static class ParsedQuery {
+        Integer npcId;
+        Integer level;
+        String name;
     }
 }

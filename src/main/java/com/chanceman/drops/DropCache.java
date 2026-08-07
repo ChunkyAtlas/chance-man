@@ -3,445 +3,521 @@ package com.chanceman.drops;
 import static net.runelite.client.RuneLite.RUNELITE_DIR;
 
 import com.chanceman.account.AccountManager;
-import com.google.gson.Gson;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import com.google.gson.Gson;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
- * Persistent drop-table cache backed by JSON files in the user's RuneLite
- * directory. The cache is mirrored in memory to make name-based lookups and
- * searches effectively instantaneous.
+ * Persistent drop table cache backed by JSON files in the user's RuneLite
+ * directory. Exact NPC identities are cached by NPC ID so same-name/same-level
+ * variants can never overwrite or satisfy one another.
  */
 @Slf4j
 @Singleton
-public class DropCache
-{
+@RequiredArgsConstructor(onConstructor_ = @Inject)
+public class DropCache {
+    private static final Duration MAX_AGE = Duration.ofDays(7);
+    private static final Duration TEMP_FILE_MAX_AGE = Duration.ofDays(1);
+    private static final String CACHE_DIRECTORY = "drops";
+    private static final String EXACT_FILE_PREFIX = "npc_";
+    private static final Pattern EXACT_CACHE_FILE = Pattern.compile("^npc_(\\d+)\\.json$");
+
     private final Gson gson;
     private final AccountManager accountManager;
     private final DropFetcher dropFetcher;
-    private static final Duration MAX_AGE = Duration.ofDays(7);
-    private final Map<Path, Object> writeLocks = new ConcurrentHashMap<>();
-    private final Map<Path, NpcDropData> cache = new ConcurrentHashMap<>();
-    private final Map<String, Path> nameIndex = new ConcurrentHashMap<>();
-    private volatile boolean indexLoaded = false;
 
-    // Dedicated IO executor so we dont block the common ForkJoinPool with file ops
+    private final Map<Path, NpcDropData> cache = new ConcurrentHashMap<>();
+    private final Object indexLock = new Object();
+
+    private volatile String loadedPlayer;
+    private volatile boolean indexLoaded;
     private ExecutorService ioExecutor;
 
-    @Inject
-    public DropCache(Gson gson, AccountManager accountManager, DropFetcher dropFetcher)
-    {
-        this.gson = gson;
-        this.accountManager = accountManager;
-        this.dropFetcher = dropFetcher;
+    private static int npcIdFromFilename(String filename) {
+        Matcher matcher = EXACT_CACHE_FILE.matcher(Objects.toString(filename, ""));
+        if (!matcher.matches()) {
+            return -1;
+        }
+        try {
+            return Integer.parseInt(matcher.group(1));
+        } catch (NumberFormatException ex) {
+            return -1;
+        }
     }
 
-    /** Preload on-disk index and prune stale cache entries. */
-    public void startUp()
-    {
+    /**
+     * Preload the current account's on-disk index and prune stale entries.
+     */
+    public void startUp() {
         ensureExecutor();
-        String player = accountManager.getPlayerName();
-        if (player == null || player.isEmpty()) { return; }
-        loadIndex();
+        String player = currentPlayer();
+        if (player == null) {
+            return;
+        }
+
+        ensureIndexForPlayer(player);
         pruneOldCaches();
     }
 
     /**
-     * Load from disk if possible; otherwise fetch from the wiki, write the
-     * JSON, and return the data. Results without drop-table sections are
-     * discarded and never cached.
+     * Fetch one NPC. Positive NPC IDs are exact identities and are cached by ID.
+     * Name only lookups are intentionally not persisted because a name/level pair
+     * is not guaranteed to identify one NPC variant.
      */
-    public CompletableFuture<NpcDropData> get(int npcId, String name, int level)
-    {
-        loadIndex();
-        final String safeName = name.replaceAll("[^A-Za-z0-9]", "_");
-        final Path file;
-        try
-        {
-            file = npcId == 0
-                    ? findExistingCacheFile(safeName, level)
-                    : getCacheFile(npcId, name, level);
-        }
-        catch (IOException ex)
-        {
-            log.error("Could not resolve cache file for {} ({}, lvl {})", npcId, name, level, ex);
-            return CompletableFuture.failedFuture(ex);
-        }
+    public CompletableFuture<NpcDropData> get(int npcId, String name, int level) {
+        String player = currentPlayer();
+        CompletableFuture<NpcDropData> raw = npcId > 0 && player != null
+                ? getOrFetchExactRaw(npcId, name, level, player)
+                : dropFetcher.fetch(npcId, name, level);
 
-        ExecutorService executor = ensureExecutor();
-        return CompletableFuture.supplyAsync(() ->
-        {
-            if (file != null)
-            {
-                NpcDropData cached = cache.get(file);
-                if (cached != null && Files.exists(file) && isFresh(file))
-                {
-                    return cached;
-                }
-
-                // stale or missing entry, clean up
-                try
-                {
-                    Files.deleteIfExists(file);
-                }
-                catch (IOException ignore) { }
-                removeIndex(file);
-            }
-            return null;
-        }, executor).thenComposeAsync(cached ->
-        {
-            if (cached != null)
-            {
-                return CompletableFuture.completedFuture(cached);
-            }
-
-            return dropFetcher.fetch(npcId, name, level)
-                    .thenApplyAsync(data ->
-                    {
-                        try
-                        {
-                            if (data == null || data.getDropTableSections().isEmpty())
-                            {
-                                return null;
-                            }
-
-                            Path out = getCacheFile(data.getNpcId(), data.getName(), data.getLevel());
-                            Files.createDirectories(out.getParent());
-                            String json = gson.toJson(data);
-
-                            Object lock = writeLocks.computeIfAbsent(out, p -> new Object());
-                            synchronized (lock)
-                            {
-                                Path tmp = out.resolveSibling(out.getFileName() + ".tmp");
-                                try
-                                {
-                                    Files.writeString(
-                                            tmp,
-                                            json,
-                                            StandardCharsets.UTF_8,
-                                            StandardOpenOption.CREATE,
-                                            StandardOpenOption.TRUNCATE_EXISTING
-                                    );
-                                    Files.move(tmp, out, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-                                }
-                                finally
-                                {
-                                    writeLocks.remove(out);
-                                    try { Files.deleteIfExists(tmp); } catch (IOException ignored) {}
-                                }
-                            }
-
-                            cache.put(out, data);
-                            nameIndex.put(buildNameKey(data.getName(), data.getLevel()), out);
-
-                            if (npcId == 0 && data.getNpcId() != 0)
-                            {
-                                // Remove old 0_id placeholder if present
-                                Path old = findExistingCacheFile(safeName, data.getLevel());
-                                if (old != null && !old.equals(out))
-                                {
-                                    Files.deleteIfExists(old);
-                                    removeIndex(old);
-                                }
-                            }
-                        }
-                        catch (Exception e)
-                        {
-                            log.error("Failed to write cache file for {}", name, e);
-                        }
-                        return data;
-                    }, executor)
-                    .exceptionally(ex ->
-                    {
-                        log.error("Error fetching drop data for NPC {}", npcId, ex);
-                        return null;
-                    });
-        }, executor);
+        return raw.thenCompose(dropFetcher::resolveForDisplay)
+                .exceptionally(ex -> {
+                    log.error("Error fetching drop data for NPC {}", npcId, ex);
+                    return null;
+                });
     }
 
     /**
-     * @return a collection of all cached NPC drop data in memory
+     * Fetch every distinct Wiki monster variant matching a page name and optional
+     * combat level. Each result carries an exact NPC ID whenever the Wiki exposes
+     * one, so two variants such as same-level armed/unarmed NPCs remain separate.
      */
-    public Collection<NpcDropData> getAllNpcData()
-    {
-        loadIndex();
+    public CompletableFuture<List<NpcDropData>> searchNpcVariants(String name, int level) {
+        return dropFetcher.fetchVariants(name, level)
+                .thenCompose(this::resolveAllForDisplay)
+                .exceptionally(ex ->
+                {
+                    log.error("Error fetching NPC variants for {} (lvl {})", name, level, ex);
+                    return new ArrayList<>();
+                });
+    }
+
+    /**
+     * Persist exactly one NPC chosen from search results. Search results are
+     * display copies, so use the same exact-ID raw-cache path as get(...) instead
+     * of serializing the display copy. That preserves the raw Wiki rows on disk
+     * and also reuses any fresh exact cache that already exists.
+     */
+    public CompletableFuture<Void> cacheSelected(NpcDropData selected) {
+        if (selected == null || selected.getNpcId() <= 0) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        String player = currentPlayer();
+        if (player == null) {
+            log.warn("Cannot cache selected NPC {} because player identity is unavailable", selected.getNpcId());
+            return CompletableFuture.completedFuture(null);
+        }
+
+        int npcId = selected.getNpcId();
+        return getOrFetchExactRaw(npcId, selected.getName(), selected.getLevel(), player)
+                .thenApply(ignored -> (Void) null)
+                .exceptionally(ex -> {
+                    log.warn("Failed to persist selected NPC {}", npcId, ex);
+                    return null;
+                });
+    }
+
+    private CompletableFuture<NpcDropData> getOrFetchExactRaw(
+            int npcId, String name, int level, String player) {
+        ExecutorService executor = ensureExecutor();
+        ensureIndexForPlayer(player);
+        Path exactFile = getCacheFile(player, npcId);
+
+        return CompletableFuture.supplyAsync(
+                () -> readFreshCache(exactFile, player, npcId, level),
+                executor
+        ).thenComposeAsync(cached -> cached != null
+                ? CompletableFuture.completedFuture(cached)
+                : fetchAndCacheExact(npcId, name, level, player, exactFile, executor), executor);
+    }
+
+    private CompletableFuture<NpcDropData> fetchAndCacheExact(
+            int npcId,
+            String name,
+            int level,
+            String player,
+            Path exactFile,
+            ExecutorService executor) {
+        return dropFetcher.fetch(npcId, name, level).thenApplyAsync(data ->
+        {
+            if (!isCacheable(data) || data.getNpcId() != npcId) {
+                return null;
+            }
+
+            try {
+                writeCacheFile(exactFile, data);
+                if (player.equals(loadedPlayer) && indexLoaded) {
+                    indexData(exactFile, data);
+                }
+            } catch (Exception ex) {
+                log.error("Failed to write exact drop cache for NPC {}", npcId, ex);
+            }
+            return data;
+        }, executor);
+    }
+
+    private CompletableFuture<List<NpcDropData>> resolveAllForDisplay(List<NpcDropData> raw) {
+        if (raw == null || raw.isEmpty()) {
+            return CompletableFuture.completedFuture(new ArrayList<>());
+        }
+
+        List<CompletableFuture<NpcDropData>> futures = raw.stream()
+                .filter(Objects::nonNull)
+                .map(dropFetcher::resolveForDisplay)
+                .collect(Collectors.toList());
+
+        return CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .thenApply(ignored -> futures.stream()
+                        .map(CompletableFuture::join)
+                        .filter(Objects::nonNull)
+                        .filter(data -> data.getDropTableSections() != null
+                                && !data.getDropTableSections().isEmpty())
+                        .collect(Collectors.toList()));
+    }
+
+    /**
+     * @return a snapshot of all exact cached NPC drop data for the current account.
+     */
+    public Collection<NpcDropData> getAllNpcData() {
+        String player = currentPlayer();
+        if (player == null) {
+            return new ArrayList<>();
+        }
+
+        ensureIndexForPlayer(player);
         return new ArrayList<>(cache.values());
     }
 
     /**
-     * Return a list of NPC names containing the supplied query. Matches from
-     * the local cache are combined with wiki search results to ensure partial
-     * lookups surface all relevant NPCs.
+     * Return NPC names containing the supplied query. Local exact-cache matches
+     * are combined with Wiki search results.
      */
-    public CompletableFuture<List<String>> searchNpcNames(String query)
-    {
+    public CompletableFuture<List<String>> searchNpcNames(String query) {
         ExecutorService executor = ensureExecutor();
         return CompletableFuture.supplyAsync(() ->
         {
-            String lc = query.toLowerCase(Locale.ROOT).trim();
-            loadIndex();
+            String search = Objects.toString(query, "").trim();
+            String lowerSearch = search.toLowerCase(Locale.ROOT);
 
-            // Preserve insertion order while de-duplicating names
+            String player = currentPlayer();
+            if (player != null) {
+                ensureIndexForPlayer(player);
+            }
+
             Set<String> names = cache.values().stream()
                     .map(NpcDropData::getName)
                     .filter(Objects::nonNull)
-                    .filter(name -> name.toLowerCase(Locale.ROOT).contains(lc))
+                    .filter(candidate -> candidate.toLowerCase(Locale.ROOT).contains(lowerSearch))
                     .collect(Collectors.toCollection(LinkedHashSet::new));
 
-            try
-            {
-                names.addAll(dropFetcher.searchNpcNames(query));
-            }
-            catch (Exception ex)
-            {
-                log.debug("Wiki search failed for {}", query, ex);
+            try {
+                names.addAll(dropFetcher.searchNpcNames(search));
+            } catch (Exception ex) {
+                log.warn("Wiki search failed for {}", search, ex);
             }
 
             return new ArrayList<>(names);
         }, executor);
     }
 
-    private boolean isFresh(Path file)
-    {
-        try
-        {
-            Instant cutoff = Instant.now().minus(MAX_AGE);
-            return Files.getLastModifiedTime(file).toInstant().isAfter(cutoff);
-        }
-        catch (IOException e)
-        {
-            return false;
-        }
-    }
-
     /**
-     * Locate an existing cache file by name and level regardless of stored ID.
+     * Delete stale cache, legacy cache JSON, and abandoned temporary files.
      */
-    private Path findExistingCacheFile(String safeName, int level) throws IOException
-    {
-        String key = safeName + "_" + level;
-        Path p = nameIndex.get(key);
-        if (p != null && Files.exists(p))
-        {
-            if (isFresh(p))
+    public void pruneOldCaches() {
+        String player = currentPlayer();
+        if (player == null) {
+            return;
+        }
+
+        ensureIndexForPlayer(player);
+        Path directory = getCacheDir(player);
+        if (!Files.isDirectory(directory)) {
+            return;
+        }
+
+        Instant cacheCutoff = Instant.now().minus(MAX_AGE);
+        Instant tempCutoff = Instant.now().minus(TEMP_FILE_MAX_AGE);
+
+        try (Stream<Path> files = Files.list(directory)) {
+            files.filter(Files::isRegularFile).forEach(path ->
             {
-                return p;
-            }
-            Files.deleteIfExists(p);
-            removeIndex(p);
-        }
-        return null;
-    }
+                try {
+                    String filename = path.getFileName().toString();
+                    Instant modified = Files.getLastModifiedTime(path).toInstant();
 
-    private Path getCacheDir() throws IOException
-    {
-        String player = accountManager.getPlayerName();
-        if (player == null)
-        {
-            throw new IOException("Player name is not available");
+                    boolean legacyJson = filename.endsWith(".json") && npcIdFromFilename(filename) < 0;
+                    boolean staleJson = filename.endsWith(".json") && modified.isBefore(cacheCutoff);
+                    boolean staleTemp = filename.endsWith(".tmp") && modified.isBefore(tempCutoff);
+                    if (legacyJson || staleJson || staleTemp) {
+                        Files.deleteIfExists(path);
+                        removeIndex(path);
+                    }
+                } catch (IOException ex) {
+                    log.warn("Failed to prune drop cache {}", path, ex);
+                }
+            });
+        } catch (IOException ex) {
+            log.warn("Error pruning drop cache directory {}", directory, ex);
         }
-        return RUNELITE_DIR.toPath()
-                .resolve("chanceman")
-                .resolve(player)
-                .resolve("drops");
-    }
-
-    /** Resolve the on-disk cache path for a specific NPC. */
-    private Path getCacheFile(int npcId, String name, int level) throws IOException
-    {
-        String safeName = name.replaceAll("[^A-Za-z0-9]", "_");
-        Path dir = getCacheDir();
-        Files.createDirectories(dir);
-        String fn = npcId + "_" + safeName + "_" + level + ".json";
-        return dir.resolve(fn);
     }
 
     /**
-     * Deletes cached drop table files older than {@link #MAX_AGE} and purges
-     * them from the in-memory index.
+     * Delete all cached drop tables for the current player.
      */
-    public void pruneOldCaches()
-    {
-        String player = accountManager.getPlayerName();
-        if (player == null)
-        {
+    public void clearAllCaches() {
+        String player = currentPlayer();
+        if (player == null) {
             return;
         }
 
-        Path dir = RUNELITE_DIR.toPath()
-                .resolve("chanceman")
-                .resolve(player)
-                .resolve("drops");
-
-        if (!Files.exists(dir))
-        {
-            return;
-        }
-
-        Instant cutoff = Instant.now().minus(MAX_AGE);
-        try (Stream<Path> files = Files.list(dir))
-        {
-            files.filter(Files::isRegularFile)
-                    .forEach(p ->
+        synchronized (indexLock) {
+            Path directory = getCacheDir(player);
+            if (Files.isDirectory(directory)) {
+                try (Stream<Path> files = Files.list(directory)) {
+                    files.filter(Files::isRegularFile).forEach(path ->
                     {
-                        try
-                        {
-                            Instant mod = Files.getLastModifiedTime(p).toInstant();
-                            if (mod.isBefore(cutoff))
-                            {
-                                Files.deleteIfExists(p);
-                                removeIndex(p);
-                            }
-                        }
-                        catch (IOException ex)
-                        {
-                            log.debug("Failed to delete old drop cache {}", p, ex);
+                        try {
+                            Files.deleteIfExists(path);
+                        } catch (IOException ex) {
+                            log.warn("Failed to delete drop cache {}", path, ex);
                         }
                     });
-        }
-        catch (IOException ex)
-        {
-            log.debug("Error pruning drop cache directory {}", dir, ex);
-        }
-    }
-
-    /**
-     * Deletes all cached drop table files for the current player and clears the
-     * in-memory index.
-     */
-    public void clearAllCaches()
-    {
-        String player = accountManager.getPlayerName();
-        if (player == null) return;
-
-        Path dir = RUNELITE_DIR.toPath()
-                .resolve("chanceman")
-                .resolve(player)
-                .resolve("drops");
-
-        if (Files.exists(dir))
-        {
-            try (Stream<Path> files = Files.list(dir))
-            {
-                files.filter(Files::isRegularFile)
-                        .forEach(p ->
-                        {
-                            try
-                            {
-                                Files.deleteIfExists(p);
-                            }
-                            catch (IOException ex)
-                            {
-                                log.debug("Failed to delete drop cache {}", p, ex);
-                            }
-                        });
-            }
-            catch (IOException ex)
-            {
-                log.debug("Error clearing drop cache directory {}", dir, ex);
-            }
-        }
-
-        cache.clear();
-        nameIndex.clear();
-        indexLoaded = true;
-    }
-
-    /** Remove the given file from the in-memory indices. */
-    private void removeIndex(Path p)
-    {
-        NpcDropData data = cache.remove(p);
-        if (data != null)
-        {
-            nameIndex.remove(buildNameKey(data.getName(), data.getLevel()));
-        }
-    }
-
-    /** Lazily populate the in-memory indices from existing cache files. */
-    private void loadIndex()
-    {
-        if (indexLoaded)
-        {
-            return;
-        }
-        synchronized (this)
-        {
-            if (indexLoaded)
-            {
-                return;
-            }
-            try
-            {
-                Path dir = getCacheDir();
-                if (Files.exists(dir))
-                {
-                    try (Stream<Path> files = Files.list(dir))
-                    {
-                        for (Path p : files.filter(Files::isRegularFile).collect(Collectors.toList()))
-                        {
-                            if (!isFresh(p))
-                            {
-                                Files.deleteIfExists(p);
-                                continue;
-                            }
-                            try
-                            {
-                                String json = Files.readString(p, StandardCharsets.UTF_8);
-                                NpcDropData data = gson.fromJson(json, NpcDropData.class);
-                                if (data != null && data.getDropTableSections() != null && !data.getDropTableSections().isEmpty())
-                                {
-                                    cache.put(p, data);
-                                    nameIndex.put(buildNameKey(data.getName(), data.getLevel()), p);
-                                }
-                                else
-                                {
-                                    Files.deleteIfExists(p);
-                                }
-                            }
-                            catch (Exception e)
-                            {
-                                log.warn("Skipping bad cache file {}", p, e);
-                                Files.deleteIfExists(p);
-                            }
-                        }
-                    }
+                } catch (IOException ex) {
+                    log.warn("Error clearing drop cache directory {}", directory, ex);
                 }
             }
-            catch (IOException e)
-            {
-                log.debug("Error loading cache index", e);
-            }
+
+            cache.clear();
+            loadedPlayer = player;
             indexLoaded = true;
         }
     }
 
-    /** Gracefully shutdown IO executor. */
-    public void shutdown() {
+    /**
+     * Gracefully stop cache IO and discard the in-memory account index.
+     */
+    public synchronized void shutdown() {
         ExecutorService executor = ioExecutor;
-        if (executor == null) {
+        if (executor != null) {
+            executor.shutdownNow();
+            ioExecutor = null;
+        }
+
+        synchronized (indexLock) {
+            cache.clear();
+            loadedPlayer = null;
+            indexLoaded = false;
+        }
+    }
+
+    private NpcDropData readFreshCache(Path file, String expectedPlayer, int expectedNpcId, int expectedLevel) {
+        if (file == null || !Files.isRegularFile(file)) {
+            if (file != null) {
+                removeIndex(file);
+            }
+            return null;
+        }
+
+        if (!isFresh(file)) {
+            deleteCacheFile(file);
+            return null;
+        }
+
+        NpcDropData inMemory = cache.get(file);
+        if (isValidExactCache(inMemory, expectedNpcId, expectedLevel)) {
+            return inMemory;
+        }
+
+        try {
+            NpcDropData data = readCacheFile(file);
+            if (!isValidExactCache(data, expectedNpcId, expectedLevel)) {
+                deleteCacheFile(file);
+                return null;
+            }
+
+            if (expectedPlayer.equals(loadedPlayer) && indexLoaded) {
+                indexData(file, data);
+            }
+            return data;
+        } catch (Exception ex) {
+            log.warn("Skipping bad cache file {}", file, ex);
+            deleteCacheFile(file);
+            return null;
+        }
+    }
+
+    private boolean isValidExactCache(NpcDropData data, int expectedNpcId, int expectedLevel) {
+        if (!isCacheable(data) || data.getNpcId() != expectedNpcId) {
+            return false;
+        }
+        return expectedLevel <= 0 || data.getLevel() <= 0 || data.getLevel() == expectedLevel;
+    }
+
+    private void writeCacheFile(Path output, NpcDropData data) throws IOException {
+        Files.createDirectories(output.getParent());
+        Path temporary = Files.createTempFile(
+                output.getParent(),
+                output.getFileName().toString() + ".",
+                ".tmp"
+        );
+
+        try {
+            Files.writeString(
+                    temporary,
+                    gson.toJson(data),
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.TRUNCATE_EXISTING,
+                    StandardOpenOption.WRITE
+            );
+
+            try {
+                Files.move(
+                        temporary,
+                        output,
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE
+                );
+            } catch (AtomicMoveNotSupportedException | UnsupportedOperationException ex) {
+                Files.move(temporary, output, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
+    }
+
+    private NpcDropData readCacheFile(Path path) throws IOException {
+        String json = Files.readString(path, StandardCharsets.UTF_8);
+        return gson.fromJson(json, NpcDropData.class);
+    }
+
+    private boolean isCacheable(NpcDropData data) {
+        return data != null
+                && data.getDropTableSections() != null
+                && !data.getDropTableSections().isEmpty();
+    }
+
+    private boolean isFresh(Path file) {
+        try {
+            Instant cutoff = Instant.now().minus(MAX_AGE);
+            return !Files.getLastModifiedTime(file).toInstant().isBefore(cutoff);
+        } catch (IOException ex) {
+            return false;
+        }
+    }
+
+    private void ensureIndexForPlayer(String player) {
+        if (indexLoaded && player.equals(loadedPlayer)) {
             return;
         }
 
-        executor.shutdownNow();
-        ioExecutor = null;
-        cache.clear();
-        nameIndex.clear();
-        indexLoaded = false;
+        synchronized (indexLock) {
+            if (indexLoaded && player.equals(loadedPlayer)) {
+                return;
+            }
+
+            if (!player.equals(loadedPlayer)) {
+                cache.clear();
+                loadedPlayer = player;
+                indexLoaded = false;
+            }
+
+            Path directory = getCacheDir(player);
+            if (!Files.exists(directory)) {
+                indexLoaded = true;
+                return;
+            }
+
+            try (Stream<Path> files = Files.list(directory)) {
+                for (Path path : files
+                        .filter(Files::isRegularFile)
+                        .filter(candidate -> candidate.getFileName().toString().endsWith(".json"))
+                        .collect(Collectors.toList())) {
+                    String filename = path.getFileName().toString();
+                    int expectedNpcId = npcIdFromFilename(filename);
+                    if (expectedNpcId < 0 || !isFresh(path)) {
+                        deleteCacheFile(path);
+                        continue;
+                    }
+                    try {
+                        NpcDropData data = readCacheFile(path);
+                        if (isValidExactCache(data, expectedNpcId, 0)) {
+                            indexData(path, data);
+                        } else {
+                            deleteCacheFile(path);
+                        }
+                    } catch (Exception ex) {
+                        log.warn("Skipping bad cache file {}", path, ex);
+                        deleteCacheFile(path);
+                    }
+                }
+                indexLoaded = true;
+            } catch (IOException ex) {
+                log.warn("Error loading cache index for {}", player, ex);
+            }
+        }
+    }
+
+    private void indexData(Path path, NpcDropData data) {
+        cache.put(path, data);
+    }
+
+    private void removeIndex(Path path) {
+        cache.remove(path);
+    }
+
+    private void deleteCacheFile(Path path) {
+        try {
+            Files.deleteIfExists(path);
+        } catch (IOException ex) {
+            log.warn("Failed to delete drop cache {}", path, ex);
+        }
+        removeIndex(path);
+    }
+
+    private Path getCacheDir(String player) {
+        return RUNELITE_DIR.toPath()
+                .resolve("chanceman")
+                .resolve(player)
+                .resolve(CACHE_DIRECTORY);
+    }
+
+    private Path getCacheFile(String player, int npcId) {
+        return getCacheDir(player).resolve(EXACT_FILE_PREFIX + npcId + ".json");
+    }
+
+    private String currentPlayer() {
+        String player = Objects.toString(accountManager.getPlayerName(), "").trim();
+        return player.isEmpty() ? null : player;
     }
 
     private synchronized ExecutorService ensureExecutor() {
@@ -452,10 +528,5 @@ public class DropCache
             );
         }
         return ioExecutor;
-    }
-
-    private String buildNameKey(String name, int level)
-    {
-        return name.replaceAll("[^A-Za-z0-9]", "_") + "_" + level;
     }
 }

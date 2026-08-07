@@ -699,7 +699,9 @@ public class MusicWidgetController
                     );
                     if (idx >= 0 && idx < limited.size())
                     {
-                        override(limited.get(idx));
+                        NpcDropData selected = limited.get(idx);
+                        searchService.cacheSelected(selected);
+                        override(selected);
                     }
                 });
             }).start();
