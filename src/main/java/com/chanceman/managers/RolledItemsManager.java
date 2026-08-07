@@ -123,7 +123,6 @@ public class RolledItemsManager
     public void stopWatching()
     {
         watcherRunning = false;
-        if (watcherThread != null) watcherThread.interrupt();
         closeWatchServiceQuietly();
         watcherThread = null;
     }
@@ -336,7 +335,7 @@ public class RolledItemsManager
         catch (IOException ioe) { return null; }
     }
 
-    /** Windows-safe: COPY current file to a timestamped backup with small retries; then prune. */
+    /** Best effort copy of the current file to a timestamped backup, then prune. */
     private void rotateBackupIfExists(Path file) throws IOException
     {
         if (!Files.exists(file)) return;
@@ -347,24 +346,13 @@ public class RolledItemsManager
         String ts = new SimpleDateFormat(BACKUP_TS_PATTERN).format(new Date());
         Path bak = backups.resolve(file.getFileName() + "." + ts + ".bak");
 
-        final int maxAttempts = 5;
-        for (int attempt = 1; ; attempt++)
+        try
         {
-            try
-            {
-                Files.copy(file, bak, StandardCopyOption.REPLACE_EXISTING);
-                break;
-            }
-            catch (FileSystemException fse)
-            {
-                if (attempt >= maxAttempts)
-                {
-                    log.error("Backup copy failed after {} attempts for {}", attempt, file, fse);
-                    break;
-                }
-                try { Thread.sleep(50L * attempt); }
-                catch (InterruptedException ie) { Thread.currentThread().interrupt(); break; }
-            }
+            Files.copy(file, bak, StandardCopyOption.REPLACE_EXISTING);
+        }
+        catch (FileSystemException fse)
+        {
+            log.warn("Backup copy failed for {}", file, fse);
         }
 
         try (java.util.stream.Stream<Path> stream = Files.list(backups))

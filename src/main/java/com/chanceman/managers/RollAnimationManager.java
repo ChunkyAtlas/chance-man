@@ -17,8 +17,9 @@ import javax.inject.Singleton;
 import javax.swing.*;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Manages roll animations and result announcements.
@@ -45,7 +46,7 @@ public class RollAnimationManager
     private Set<Integer> allTradeableItems = Collections.emptySet();
 
     private final Queue<Integer> rollQueue = new ConcurrentLinkedQueue<>();
-    private ExecutorService executor = Executors.newSingleThreadExecutor();
+    private ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
     private volatile boolean isRolling = false;
 
@@ -106,90 +107,78 @@ public class RollAnimationManager
      */
     private void performRoll(int obtainedItemId)
     {
-        try
+        if (!hasTradeablesReady())
         {
-            // If tradeables became invalid mid-roll, bail safely.
-            if (!hasTradeablesReady())
-            {
-                return;
-            }
-
-            int rollDuration = 3000;
-            overlay.startRollAnimation(0, rollDuration, this::getRandomLockedItem);
-
-            try
-            {
-                Thread.sleep(rollDuration + SNAP_WINDOW_MS);
-            }
-            catch (InterruptedException e)
-            {
-                Thread.currentThread().interrupt();
-            }
-
-            int rolledItemId = overlay.getFinalItem();
-
-            rolledManager.markRolled(rolledItemId);
-
-            final boolean wasManual = manualRoll;
-
-            clientThread.invoke(() ->
-            {
-                String rolledTag = ColorUtil.wrapWithColorTag(
-                        getItemName(rolledItemId),
-                        config.unlockedItemColor()
-                );
-
-                String message;
-                if (wasManual)
-                {
-                    String pressTag = ColorUtil.wrapWithColorTag(
-                            "pressing a button",
-                            config.rolledItemColor()
-                    );
-                    message = "Rolled " + rolledTag + " by " + pressTag;
-                }
-                else
-                {
-                    String obtainedTag = ColorUtil.wrapWithColorTag(
-                            getItemName(obtainedItemId),
-                            config.rolledItemColor()
-                    );
-                    message = "Rolled " + rolledTag + " by obtaining " + obtainedTag;
-                }
-
-                client.addChatMessage(
-                        ChatMessageType.GAMEMESSAGE,
-                        "",
-                        message,
-                        null
-                );
-
-                if (chanceManPanel != null)
-                {
-                    SwingUtilities.invokeLater(chanceManPanel::updatePanel);
-                }
-            });
-
-            int remainingHighlight =
-                    Math.max(0, overlay.getHighlightDurationMs() - SNAP_WINDOW_MS);
-
-            if (remainingHighlight > 0)
-            {
-                try
-                {
-                    Thread.sleep(remainingHighlight);
-                }
-                catch (InterruptedException e)
-                {
-                    Thread.currentThread().interrupt();
-                }
-            }
+            finishRoll();
+            return;
         }
-        finally
+
+        int rollDuration = 3000;
+        overlay.startRollAnimation(0, rollDuration, this::getRandomLockedItem);
+
+        executor.schedule(
+                () -> completeRoll(obtainedItemId),
+                rollDuration + SNAP_WINDOW_MS,
+                TimeUnit.MILLISECONDS
+        );
+
+        executor.schedule(
+                this::finishRoll,
+                rollDuration + overlay.getHighlightDurationMs(),
+                TimeUnit.MILLISECONDS
+        );
+    }
+
+    private void completeRoll(int obtainedItemId)
+    {
+        int rolledItemId = overlay.getFinalItem();
+        rolledManager.markRolled(rolledItemId);
+
+        final boolean wasManual = manualRoll;
+
+        clientThread.invoke(() ->
         {
-            manualRoll = false;
-            isRolling = false;
-        }
+            String rolledTag = ColorUtil.wrapWithColorTag(
+                    getItemName(rolledItemId),
+                    config.unlockedItemColor()
+            );
+
+            String message;
+            if (wasManual)
+            {
+                String pressTag = ColorUtil.wrapWithColorTag(
+                        "pressing a button",
+                        config.rolledItemColor()
+                );
+                message = "Rolled " + rolledTag + " by " + pressTag;
+            }
+            else
+            {
+                String obtainedTag = ColorUtil.wrapWithColorTag(
+                        getItemName(obtainedItemId),
+                        config.rolledItemColor()
+                );
+                message = "Rolled " + rolledTag + " by obtaining " + obtainedTag;
+            }
+
+            client.addChatMessage(
+                    ChatMessageType.GAMEMESSAGE,
+                    "",
+                    message,
+                    null
+            );
+
+            if (chanceManPanel != null)
+            {
+                SwingUtilities.invokeLater(chanceManPanel::updatePanel);
+            }
+        });
+    }
+
+    private void finishRoll()
+    {
+        manualRoll = false;
+        isRolling = false;
     }
 
     public boolean isRolling()
@@ -234,7 +223,7 @@ public class RollAnimationManager
     {
         if (executor == null || executor.isShutdown() || executor.isTerminated())
         {
-            executor = Executors.newSingleThreadExecutor();
+            executor = Executors.newSingleThreadScheduledExecutor();
         }
     }
 
