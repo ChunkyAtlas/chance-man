@@ -523,7 +523,7 @@ public class DropCache {
     private synchronized ExecutorService ensureExecutor() {
         if (ioExecutor == null || ioExecutor.isShutdown() || ioExecutor.isTerminated()) {
             ioExecutor = Executors.newFixedThreadPool(
-                    Math.max(2, Runtime.getRuntime().availableProcessors() / 2),
+                    2,
                     new ThreadFactoryBuilder().setNameFormat("dropcache-io-%d").build()
             );
         }
