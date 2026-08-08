@@ -255,7 +255,6 @@ public final class BlockedItems {
         blocked.add(ItemID.LEAGUE_5_CONTACT_SCROLL); // Raging Echoes NPC Contact Scroll
         blocked.add(ItemID.LEAGUE5_RELIC_HUNTER_CANE); // Raging Echoes Cane
         blocked.add(ItemID.BARROWS_AHRIM_ORNAMENT_KIT); // Echo Ahrim's Robes Ornament Kit
-        blocked.add(ItemID.BARROWS_AHRIM_WEAPON); // Echo Ahrim's Staff Ornament Kit
         blocked.add(ItemID.VIRTUS_ORNAMENT_KIT); // Echo Virtus Robes Ornament Kit
         blocked.add(ItemID.VENATOR_BOW_ORNAMENT_KIT); // Echo Venator Bow Ornament Kit
         blocked.add(ItemID.LEAGUE5_RELIC_HUNTER_HAT_T1); // Raging Echoes Hat (t1)
@@ -316,6 +315,8 @@ public final class BlockedItems {
         blocked.add(ItemID.BH_SUPPLY_CRATE); // Bounty Supply Crate
         blocked.add(ItemID.DUMMY_STYMPHIKE_FEATHER01); // Dummy Stymphike Feather
         blocked.add(ItemID.MAD_ANGEL_SWORD); // Placeholder (May end up adding this back into the pool later)
+        blocked.add(ItemID.DRAGON_INCENDIARY_CANNONBALL); // Dragon Incendiary Cannonball
+        blocked.add(ItemID.DRAGON_CHAINSHOT_CANNONBALL); // Dragon Chainshot Cannonball
 
         // Deadman Annihilation Items
         blocked.add(ItemID.DEADMAN_2026_WEAPON_ORNAMENT_SCROLL); // Annihilation weapon scroll
