@@ -42,6 +42,8 @@ public final class BlockedItems {
         blocked.add(ItemID.MAGIC_ROCK_OF_FAIRIES); // Trinket of Fairies
         blocked.add(ItemID.MAGIC_ROCK_OF_UNDEAD); // Trinket of Undead
         blocked.add(ItemID.MAGIC_ROCK_OF_VENGEANCE); // Trinket of Vengeance
+        blocked.add(ItemID.MAGIC_ROCK_OF_VENGEANCE_1_USE); // Trinket of Vengeance (1)
+        blocked.add(ItemID.MAGIC_ROCK_OF_VENGEANCE_2_USE); // Trinket of Vengeance (2)
         blocked.add(ItemID.MORRIGANS_COIF); // Morrigan's Coif
         blocked.add(ItemID.MORRIGANS_LEATHER_BODY); // Morrigan's Leather Body
         blocked.add(ItemID.MORRIGANS_LEATHER_CHAPS); // Morrigan's Leather Chaps
@@ -141,6 +143,8 @@ public final class BlockedItems {
         blocked.add(ItemID.SIGIL_OF_TITANIUM_UNATTUNED); // Sigil Of Titanium
         blocked.add(ItemID.SIGIL_OF_VERSATILITY_UNATTUNED); // Sigil Of Versatility
         blocked.add(ItemID.SIGIL_OF_WOODCRAFT_UNATTUNED); // Sigil Of Woodcraft
+        blocked.add(ItemID.BH_EMBLEM); // Archaic emblem (tier 1)
+        blocked.add(ItemID.BH_EMBLEM_5); // Archaic emblem (tier 5)
 
         // Twisted Leagues Rewards
         blocked.add(ItemID.TWISTED_BANNER); // Twisted Banner
@@ -310,6 +314,8 @@ public final class BlockedItems {
         blocked.add(ItemID.POH_FLATPACK_LECTURN6); // Mahogany Eagle (FLATPACK)
         blocked.add(ItemID.POH_FLATPACK_LECTURN7); // Mahogany Demon (FLATPACK)
         blocked.add(ItemID.BH_SUPPLY_CRATE); // Bounty Supply Crate
+        blocked.add(ItemID.DUMMY_STYMPHIKE_FEATHER01); // Dummy Stymphike Feather
+        blocked.add(ItemID.MAD_ANGEL_SWORD); // Placeholder (May end up adding this back into the pool later)
 
         // Deadman Annihilation Items
         blocked.add(ItemID.DEADMAN_2026_WEAPON_ORNAMENT_SCROLL); // Annihilation weapon scroll
@@ -334,6 +340,9 @@ public final class BlockedItems {
         blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_TOP_T3); // Demonic robe top (t3)
         blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_LEGS_T3); // Demonic robe bottom (t3)
         blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_BOOTS_T3); // Demonic boots (t3)
+        blocked.add(ItemID.SET_LEAGUE_6_RELICHUNTER_T1); // Demonic pacts relic hunter (t1)
+        blocked.add(ItemID.SET_LEAGUE_6_RELICHUNTER_T2); // Demonic pacts relic hunter (t2)
+        blocked.add(ItemID.SET_LEAGUE_6_RELICHUNTER_T3); // Demonic pacts relic hunter (t3)
         blocked.add(ItemID.LEAGUE_6_BANNER); // Demonic pacts banner
         blocked.add(ItemID.LEAGUE_6_RITUAL_KIT); // Impish ritual kit
         blocked.add(ItemID.LEAGUE_6_THRONE); // Demonic pacts throne scroll
@@ -341,6 +350,7 @@ public final class BlockedItems {
         blocked.add(ItemID.DEMONIC_TRIDENT_ORNAMENT_KIT); // Demonic trident ornament kit
         blocked.add(ItemID.DEMONIC_STAFF_ORNAMENT_KIT); // Demonic staff ornament kit
         blocked.add(ItemID.DEMONIC_AXE_ORNAMENT_KIT); // Demonic axe ornament kit
+        blocked.add(ItemID.LEAGUE_6_RELIC_HUNTER_SCEPTRE); // Demonic sceptre
         blocked.add(ItemID.LEAGUE_6_DEMONIC_QUILL); // Demonic quill
         blocked.add(ItemID.LEAGUE_6_BUTLER_SCROLL); // Demonic pacts demon butler scroll
         blocked.add(ItemID.DEMONIC_SKIN_ORNAMENT_KIT); //Demonic skin contract
