@@ -27,7 +27,7 @@ dependencies {
 }
 
 group = 'com.chanceman'
-version = '3.3.2'
+version = '3.3.3'
 
 tasks.withType(JavaCompile).configureEach {
 	options.encoding = 'UTF-8'
