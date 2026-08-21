@@ -3,6 +3,7 @@ package com.chanceman.menus;
 import com.chanceman.ChanceManConfig;
 import com.chanceman.ChanceManPlugin;
 import com.chanceman.filters.EnsouledHeadMapping;
+import com.chanceman.filters.BlockedItems;
 import com.chanceman.managers.RolledItemsManager;
 import lombok.Getter;
 import lombok.Setter;
@@ -198,6 +199,7 @@ public class ActionHandler {
 	{
 		return plugin.isGeTradeable(itemId)
 				&& !plugin.isNotTracked(itemId)
+				&& !BlockedItems.getBLOCKED_ITEMS().contains(itemId)
 				&& !rolledItemsManager.isRolled(itemId);
 	}
 
@@ -274,9 +276,14 @@ public class ActionHandler {
 	 * A static helper to further safeguard ground item actions.
 	 * If a ground item is locked, this method consumes the event.
 	 */
-	public static void handleGroundItems(ItemManager itemManager, RolledItemsManager rolledItemsManager,
-										 MenuOptionClicked event, ChanceManPlugin plugin) {
-		if (event.getMenuAction() != null && GROUND_ACTIONS.contains(event.getMenuAction())) {
+	public static void handleGroundItems(
+			ItemManager itemManager,
+			RolledItemsManager rolledItemsManager,
+			MenuOptionClicked event,
+			ChanceManPlugin plugin)
+	{
+		if (event.getMenuAction() != null && GROUND_ACTIONS.contains(event.getMenuAction()))
+		{
 			int rawItemId = event.getId() != -1
 					? event.getId()
 					: event.getMenuEntry().getItemId();
@@ -284,8 +291,10 @@ public class ActionHandler {
 			int canonicalGroundId = itemManager.canonicalize(mapped);
 			if (plugin.isGeTradeable(canonicalGroundId)
 					&& !plugin.isNotTracked(canonicalGroundId)
+					&& !BlockedItems.getBLOCKED_ITEMS().contains(canonicalGroundId)
 					&& rolledItemsManager != null
-					&& !rolledItemsManager.isRolled(canonicalGroundId)) {
+					&& !rolledItemsManager.isRolled(canonicalGroundId))
+			{
 				event.consume();
 			}
 		}

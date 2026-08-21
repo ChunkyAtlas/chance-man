@@ -4,6 +4,7 @@ import com.chanceman.account.AccountChanged;
 import com.chanceman.account.AccountManager;
 import com.chanceman.drops.DropFetcher;
 import com.chanceman.drops.DropCache;
+import com.chanceman.filters.BlockedItems;
 import com.chanceman.filters.EnsouledHeadMapping;
 import com.chanceman.menus.ActionHandler;
 import com.chanceman.filters.ItemsFilter;
@@ -417,7 +418,10 @@ public class ChanceManPlugin extends Plugin
         TileItem tileItem = (TileItem) event.getItem();
         int itemId = EnsouledHeadMapping.toTradeableId(tileItem.getId());
         int canonicalItemId = itemManager.canonicalize(itemId);
-        if (!isGeTradeable(canonicalItemId) || isNotTracked(canonicalItemId))
+
+        if (!isGeTradeable(canonicalItemId)
+                || isNotTracked(canonicalItemId)
+                || BlockedItems.getBLOCKED_ITEMS().contains(canonicalItemId))
         {
             return;
         }
@@ -446,7 +450,10 @@ public class ChanceManPlugin extends Plugin
                 int rawItemId = item.getId();
                 int mapped = EnsouledHeadMapping.toTradeableId(rawItemId);
                 int canonicalId = itemManager.canonicalize(mapped);
-                if (!isGeTradeable(canonicalId) || isNotTracked(canonicalId))
+
+                if (!isGeTradeable(canonicalId)
+                        || isNotTracked(canonicalId)
+                        || BlockedItems.getBLOCKED_ITEMS().contains(canonicalId))
                 {
                     continue;
                 }
@@ -458,7 +465,11 @@ public class ChanceManPlugin extends Plugin
                     processed.add(canonicalId);
                 }
             }
-            if (!processed.isEmpty()) refreshDropsViewerIfOpen();
+
+            if (!processed.isEmpty())
+            {
+                refreshDropsViewerIfOpen();
+            }
         }
     }
 

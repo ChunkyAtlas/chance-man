@@ -2,6 +2,7 @@ package com.chanceman.ui;
 
 import com.chanceman.managers.RolledItemsManager;
 import com.chanceman.filters.EnsouledHeadMapping;
+import com.chanceman.filters.BlockedItems;
 import com.chanceman.menus.EnabledUI;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
@@ -119,11 +120,13 @@ public class ItemDimmerController {
         return result;
     }
 
-    private boolean shouldDim(int rawItemId) {
+    private boolean shouldDim(int rawItemId)
+    {
         final int mappedItemId = EnsouledHeadMapping.toTradeableId(rawItemId);
         final int canonicalItemId = canonicalize(mappedItemId);
         if (canonicalItemId <= 0) return false;
         if (!isTradeableCanonical(canonicalItemId)) return false;
+        if (BlockedItems.getBLOCKED_ITEMS().contains(canonicalItemId)) return false;
         return !isRolled(mappedItemId, canonicalItemId);
     }
 
