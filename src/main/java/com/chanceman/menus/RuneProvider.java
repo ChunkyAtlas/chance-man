@@ -76,7 +76,13 @@ public enum RuneProvider
 	TWINFLAME_STAFF(true, ItemID.TWINFLAME_STAFF, WATER_RUNE, FIRE_RUNE),
 
 	// Other
-	BRYOPHYTAS_STAFF_CHARGED(true, ItemID.NATURE_STAFF_CHARGED, NATURE_RUNE);
+	BRYOPHYTAS_STAFF_CHARGED(true, ItemID.NATURE_STAFF_CHARGED, NATURE_RUNE),
+	SLAYER_STAFF(true, ItemID.SLAYER_STAFF),
+	SLAYER_STAFF_E(true, ItemID.SLAYER_STAFF_ENCHANTED, SLAYER_STAFF),
+	STAFF_OF_THE_DEAD(true, ItemID.SOTD, SLAYER_STAFF),
+	TOXIC_STAFF_OF_THE_DEAD(true, ItemID.TOXIC_SOTD_CHARGED, SLAYER_STAFF),
+	STAFF_OF_LIGHT(true, ItemID.STAFF_OF_LIGHT, SLAYER_STAFF),
+	STAFF_OF_BALANCE(true, ItemID.STAFF_OF_BALANCE, SLAYER_STAFF);
 
 	private final boolean requiresEquipped;
 	private final int id;
@@ -93,7 +99,15 @@ public enum RuneProvider
 	{
 		this.requiresEquipped = requiresEquipped;
 		this.id = id;
-		for (RuneProvider runeProvider : provides) this.provides.addAll(runeProvider.getProvides());
+		if (provides.length == 0)
+		{
+			this.provides.add(id);
+			return;
+		}
+		for (RuneProvider runeProvider : provides)
+		{
+			this.provides.addAll(runeProvider.getProvides());
+		}
 	}
 
 	private static final HashSet<Integer> EQUIPPED_PROVIDERS = new HashSet<>();
