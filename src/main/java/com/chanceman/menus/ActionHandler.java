@@ -13,6 +13,8 @@ import net.runelite.api.MenuEntry;
 import net.runelite.api.Client;
 import net.runelite.api.Item;
 import net.runelite.api.ItemContainer;
+import net.runelite.api.NPC;
+import net.runelite.api.NPCComposition;
 import net.runelite.api.events.MenuOptionClicked;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.WidgetClosed;
@@ -257,6 +259,16 @@ public class ActionHandler {
 			if (t.contains("fishing spot") || t.contains("spirit pool"))
 				return true;
 		}
+		if (target.equalsIgnoreCase("Reward pool")
+				&& (option.equalsIgnoreCase("net") || option.equalsIgnoreCase("big-search")))
+		{
+			return restrictions.isAnyNetEnabled();
+		}
+		if (option.equalsIgnoreCase("net")
+				&& target.toLowerCase().contains("fishing spot"))
+		{
+			return isNetFishingEnabled(entry);
+		}
 		if (SkillOp.isSkillOp(option))
 			return restrictions.isSkillOpEnabled(option);
 		if (Spell.isSpell(option))
@@ -298,6 +310,33 @@ public class ActionHandler {
 				event.consume();
 			}
 		}
+	}
+
+	private boolean isNetFishingEnabled(MenuEntry entry)
+	{
+		NPC npc = entry.getNpc();
+		if (npc != null)
+		{
+			NPCComposition composition = npc.getTransformedComposition();
+			if (composition == null)
+			{
+				composition = npc.getComposition();
+			}
+
+			String[] actions = composition.getActions();
+			if (actions != null)
+			{
+				for (String npcAction : actions)
+				{
+					if ("Harpoon".equalsIgnoreCase(npcAction))
+					{
+						return restrictions.isSkillOpEnabled(SkillOp.BIG_NET.getOption());
+					}
+				}
+			}
+		}
+
+		return restrictions.isSkillOpEnabled(SkillOp.SMALL_NET.getOption());
 	}
 
 	/**

@@ -139,6 +139,12 @@ public class Restrictions
 		return enabledSkillOps.contains(op);
 	}
 
+	public boolean isAnyNetEnabled()
+	{
+		return enabledSkillOps.contains(SkillOp.SMALL_NET)
+				|| enabledSkillOps.contains(SkillOp.BIG_NET);
+	}
+
 	private boolean shouldSkipItem(int id)
 	{
 		if (!plugin.isInPlay(id))
