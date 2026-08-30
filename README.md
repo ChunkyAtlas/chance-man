@@ -54,10 +54,9 @@ This distinction is reflected clearly in chat messages, for example:
 
 - Relational rolls are available as an opt-in mode and keep a separate counter for each character.
 - The maintained `src/main/resources/com/chanceman/relational-items.json` resource defines tool and quest pools.
-- The quest pool is a live OSRS Wiki snapshot of the tradeable items listed in the `Infobox Quest` `items` fields across current quests and miniquests; quest-only rewards are not included.
-- A starter-skilling tool-pool item is guaranteed after every configured number of completed attempts; the default cadence is 100 attempts. The pool includes equipment needed to begin skill actions or gather items, such as Hunter traps, Fletching knives, Fishing equipment, Mining pickaxes, Woodcutting axes, and Tool Leprechaun farming equipment. The cadence resets after a tool roll.
-- Every completed roll unlocks one item. Relational selection changes which pool supplies that item; it does not create empty or dry rolls.
-- Quest items are removed from the normal pool and receive increasing relative weight after each non-quest attempt. A successful quest roll resets that miss streak.
+- A starter-skilling tool-pool item is guaranteed after every configured number of completed attempts; the default cadence is 100 attempts. The pool includes equipment needed to begin skill actions or gather items, such as Hunter traps, crafting equipment, Fishing equipment, pickaxes, axes, and Tool Leprechaun farming equipment.
+- Every completed roll unlocks one item. Relational selection changes which pool supplies that item.
+- Quest items are removed from the normal pool and receive increasing weight after each non-quest attempt. A successful quest roll resets that miss streak.
 - If a special pool has no remaining locked items, the selector falls back to the next available pool.
 - Manual rolls advance the same counters as automatic rolls.
 
