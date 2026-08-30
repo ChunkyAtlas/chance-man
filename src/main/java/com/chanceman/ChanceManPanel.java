@@ -3,6 +3,8 @@ package com.chanceman;
 import com.chanceman.managers.ObtainedItemsManager;
 import com.chanceman.managers.RollAnimationManager;
 import com.chanceman.managers.RolledItemsManager;
+import com.chanceman.relational.RelationalRollState;
+import com.chanceman.relational.RelationalRollStateManager;
 import net.runelite.api.ItemComposition;
 import net.runelite.client.callback.ClientThread;
 import net.runelite.client.game.ItemManager;
@@ -19,16 +21,7 @@ import java.util.*;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Panel for Chance Man.
- * Shows a searchable list of items from rolled/obtained state. A dropdown selects which list:
- *  - Obtained
- *  - Rolled
- *  - Rolled, not Obtained
- *  - Usable (in both sets)
- * Items are shown newest-first based on underlying manager insertion order; for Usable,
- * ordering follows rolled recency.
- */
+/** Panel for Chance Man item and roll progress. */
 public class ChanceManPanel extends PluginPanel
 {
     private final ObtainedItemsManager obtainedItemsManager;
@@ -37,6 +30,7 @@ public class ChanceManPanel extends PluginPanel
     private final HashSet<Integer> allTradeableItems;
     private final ClientThread clientThread;
     private final RollAnimationManager rollAnimationManager;
+    private final RelationalRollStateManager relationalStateManager;
 
     private final Map<Integer, ImageIcon> itemIconCache = new ConcurrentHashMap<>();
     private final Map<Integer, String> itemNameCache = new ConcurrentHashMap<>();
@@ -48,6 +42,7 @@ public class ChanceManPanel extends PluginPanel
     private final DefaultListModel<Integer> listModel = new DefaultListModel<>();
     private final JList<Integer> itemList = new JList<>(listModel);
     private final JLabel countLabel = new JLabel("0/0");
+    private final JLabel relationalStatusLabel = new JLabel("Rolls: 0 | Tool cadence: 0 | Quest misses: 0");
     private final JButton rollButton = new JButton("Roll");
 
     private enum ListMode
@@ -77,8 +72,8 @@ public class ChanceManPanel extends PluginPanel
     }
 
     private static final Map<ListMode, String> MODE_TOOLTIPS = Map.of(
-            ListMode.ROLLED, "Items that have been rolled/unlocked (legacy: Unlocked).",
-            ListMode.OBTAINED, "Items you have obtained. (legacy: Rolled).",
+            ListMode.ROLLED, "Items that have been rolled/unlocked.",
+            ListMode.OBTAINED, "Items you have obtained.",
             ListMode.ROLLED_NOT_OBTAINED, "Items you have rolled, but have not obtained yet.",
             ListMode.USABLE, "Items that are both obtained and rolled."
     );
@@ -94,7 +89,8 @@ public class ChanceManPanel extends PluginPanel
             ItemManager itemManager,
             HashSet<Integer> allTradeableItems,
             ClientThread clientThread,
-            RollAnimationManager rollAnimationManager
+            RollAnimationManager rollAnimationManager,
+            RelationalRollStateManager relationalStateManager
     )
     {
         this.obtainedItemsManager = obtainedItemsManager;
@@ -103,6 +99,7 @@ public class ChanceManPanel extends PluginPanel
         this.allTradeableItems = allTradeableItems;
         this.clientThread = clientThread;
         this.rollAnimationManager = rollAnimationManager;
+        this.relationalStateManager = relationalStateManager;
         init();
     }
 
@@ -343,6 +340,13 @@ public class ChanceManPanel extends PluginPanel
         countPanel.add(countLabel);
         bottom.add(countPanel);
 
+        JPanel relationalPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
+        relationalPanel.setOpaque(false);
+        relationalStatusLabel.setFont(new Font("Arial", Font.PLAIN, 10));
+        relationalStatusLabel.setForeground(new Color(180, 180, 180));
+        relationalPanel.add(relationalStatusLabel);
+        bottom.add(relationalPanel);
+
         bottom.add(Box.createVerticalStrut(10));
 
         JPanel rollPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 0, 0));
@@ -440,8 +444,11 @@ public class ChanceManPanel extends PluginPanel
                     listModel.addElement(id);
                 }
                 countLabel.setText(base.size() + "/" + total);
+                RelationalRollState relationalState = relationalStateManager.getState();
+                relationalStatusLabel.setText("Rolls: " + relationalState.getTotalRolls()
+                        + " | Tool cadence: " + relationalState.getRollsSinceToolRoll()
+                        + " | Quest misses: " + relationalState.getQuestMissStreak());
 
-                // extra stability during mode swaps
                 itemList.revalidate();
                 itemList.repaint();
             });

@@ -125,7 +125,7 @@ public class ItemDimmerController {
         final int mappedItemId = EnsouledHeadMapping.toTradeableId(rawItemId);
         final int canonicalItemId = canonicalize(mappedItemId);
         if (canonicalItemId <= 0) return false;
-        if (!isTradeableCanonical(canonicalItemId)) return false;
+        if (!isTrackedCanonical(canonicalItemId)) return false;
         if (BlockedItems.getBLOCKED_ITEMS().contains(canonicalItemId)) return false;
         return !isRolled(mappedItemId, canonicalItemId);
     }
@@ -204,7 +204,7 @@ public class ItemDimmerController {
         return w != null && w.getItemId() > 0 && w.getItemQuantity() == 0;
     }
 
-    private boolean isTradeableCanonical(int canonicalItemId) {
+    private boolean isTrackedCanonical(int canonicalItemId) {
         try {
             final Boolean cached = tradeableCache.get(canonicalItemId);
             if (cached != null) return cached;

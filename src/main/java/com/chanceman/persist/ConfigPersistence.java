@@ -10,12 +10,6 @@ import java.lang.reflect.Type;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
-/**
- * Mirrors ChanceMan state into RuneLite ConfigManager so it can sync across machines
- * via RuneLite's profile/cloud sync.
- * Uses stamped read/write: each set is stored with a last-write timestamp
- * to support last-writer-wins (LWW) reconciliation across machines.
- */
 @Singleton
 public final class ConfigPersistence
 {
@@ -48,30 +42,57 @@ public final class ConfigPersistence
         }
     }
 
+    /** Value class for stamped JSON reads used by non-set plugin state. */
+    public static final class StampedValue
+    {
+        public final String data;
+        public final long ts;
+
+        public StampedValue(String data, long ts)
+        {
+            this.data = (data != null) ? data : "";
+            this.ts = Math.max(0L, ts);
+        }
+    }
+
+    public StampedValue readStampedValue(String player, String key)
+    {
+        if (isBlank(player) || isBlank(key)) return new StampedValue("", 0L);
+
+        String rawData = configManager.getConfiguration(GROUP, dataKey(key, player));
+        String rawTs = configManager.getConfiguration(GROUP, tsKey(key, player));
+        if (isBlank(rawData) || isBlank(rawTs)) return new StampedValue("", 0L);
+        return new StampedValue(rawData, parseLongSafe(rawTs));
+    }
+
+    public void writeStampedValue(String player, String key, String data, long timestampMillis)
+    {
+        if (isBlank(player) || isBlank(key)) return;
+        configManager.setConfiguration(GROUP, dataKey(key, player), data != null ? data : "");
+        configManager.setConfiguration(GROUP, tsKey(key, player), String.valueOf(Math.max(0L, timestampMillis)));
+    }
+
+    public boolean writeStampedValueIfNewer(String player, String key, String data, long timestampMillis)
+    {
+        if (isBlank(player) || isBlank(key)) return false;
+        long existingTs = parseLongSafe(configManager.getConfiguration(GROUP, tsKey(key, player)));
+        if (timestampMillis < existingTs) return false;
+        writeStampedValue(player, key, data, timestampMillis);
+        return true;
+    }
+
     /**
      * Read a stamped set from ConfigManager.
      * Returns empty set + ts=0 if absent or malformed.
      */
     public StampedSet readStampedSet(String player, String key)
     {
-        if (isBlank(player) || isBlank(key))
-        {
-            return new StampedSet(new LinkedHashSet<>(), 0L);
-        }
-
-        String rawData = configManager.getConfiguration(GROUP, dataKey(key, player));
-        String rawTs   = configManager.getConfiguration(GROUP, tsKey(key, player));
-
-        if (isBlank(rawData) || isBlank(rawTs))
-        {
-            return new StampedSet(new LinkedHashSet<>(), 0L);
-        }
-
+        StampedValue stamped = readStampedValue(player, key);
+        if (isBlank(stamped.data)) return new StampedSet(new LinkedHashSet<>(), 0L);
         try
         {
-            Set<Integer> parsed = gson.fromJson(rawData, SET_TYPE);
-            long ts = parseLongSafe(rawTs);
-            return new StampedSet((parsed != null) ? parsed : new LinkedHashSet<>(), ts);
+            Set<Integer> parsed = gson.fromJson(stamped.data, SET_TYPE);
+            return new StampedSet((parsed != null) ? parsed : new LinkedHashSet<>(), stamped.ts);
         }
         catch (Exception ignored)
         {
@@ -88,12 +109,7 @@ public final class ConfigPersistence
     {
         if (isBlank(player) || isBlank(key)) return;
 
-        String dataJson = gson.toJson((data != null) ? data : new LinkedHashSet<>());
-        String tsStr    = String.valueOf(Math.max(0L, timestampMillis));
-
-        // Two separate keys: value and timestamp
-        configManager.setConfiguration(GROUP, dataKey(key, player), dataJson);
-        configManager.setConfiguration(GROUP, tsKey(key, player), tsStr);
+        writeStampedValue(player, key, gson.toJson((data != null) ? data : new LinkedHashSet<>()), timestampMillis);
     }
 
     /**
@@ -107,14 +123,11 @@ public final class ConfigPersistence
     {
         if (isBlank(player) || isBlank(key)) return false;
 
-        long existingTs = parseLongSafe(configManager.getConfiguration(GROUP, tsKey(key, player)));
-        if (timestampMillis < existingTs)
-        {
-            // Skip stale write
-            return false;
-        }
-        writeStampedSet(player, key, data, timestampMillis);
-        return true;
+        return writeStampedValueIfNewer(
+                player,
+                key,
+                gson.toJson((data != null) ? data : new LinkedHashSet<>()),
+                timestampMillis);
     }
 
     private static boolean isBlank(String s) { return s == null || s.isEmpty(); }

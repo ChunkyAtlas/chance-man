@@ -99,7 +99,7 @@ public class ActionHandler {
             int mapped = EnsouledHeadMapping.toTradeableId(rawItemId);
             int canonicalGroundId = itemManager.canonicalize(mapped);
 
-            if (plugin.isGeTradeable(canonicalGroundId)
+            if (plugin.isTrackedItem(canonicalGroundId)
                     && !plugin.isNotTracked(canonicalGroundId)
                     && !BlockedItems.getBLOCKED_ITEMS().contains(canonicalGroundId)
                     && rolledItemsManager != null
@@ -194,7 +194,7 @@ public class ActionHandler {
      * @return true if it’s tradeable, tracked, and still locked
      */
     private boolean isLockedGroundItem(int itemId) {
-        return plugin.isGeTradeable(itemId)
+        return plugin.isTrackedItem(itemId)
                 && !plugin.isNotTracked(itemId)
                 && !BlockedItems.getBLOCKED_ITEMS().contains(itemId)
                 && !rolledItemsManager.isRolled(itemId);

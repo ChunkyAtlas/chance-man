@@ -176,4 +176,45 @@ public interface ChanceManConfig extends Config
     {
         return 150;
     }
+
+    @ConfigItem(
+            keyName = "enableRelationalRolls",
+            name = "Enable Relational Rolls",
+            description = "Use tool cadence and gradually increasing quest-item weighting.",
+            position = 19
+    )
+    default boolean enableRelationalRolls() { return false; }
+
+    @net.runelite.client.config.Range(min = 1, max = 100)
+    @ConfigItem(
+            keyName = "toolRollInterval",
+            name = "Tool Roll Every X Rolls",
+            description = "Guarantee a tool-pool roll after this many completed rolls.",
+            position = 20
+    )
+    default int toolRollInterval() { return 100; }
+
+    @ConfigItem(
+            keyName = "questBaseWeight",
+            name = "Quest Base Weight",
+            description = "Starting relative chance for the quest pool versus the normal pool.",
+            position = 22
+    )
+    default double questBaseWeight() { return 0.02; }
+
+    @ConfigItem(
+            keyName = "questWeightGrowth",
+            name = "Quest Weight per Miss",
+            description = "Additional quest-pool weight added after each non-quest roll.",
+            position = 23
+    )
+    default double questWeightGrowth() { return 0.01; }
+
+    @ConfigItem(
+            keyName = "questWeightCap",
+            name = "Quest Weight Cap",
+            description = "Maximum quest-pool weight; set to 0 for no cap.",
+            position = 24
+    )
+    default double questWeightCap() { return 0.25; }
 }

@@ -50,6 +50,17 @@ This distinction is reflected clearly in chat messages, for example:
     - the item whose obtain triggered the roll.
 - A **Roll** button in the sidebar allows you to manually unlock a random locked item if any remain.
 
+### Relational Rolling
+
+- Relational rolls are available as an opt-in mode and keep a separate counter for each character.
+- The maintained `src/main/resources/com/chanceman/relational-items.json` resource defines tool and quest pools.
+- The quest pool is a live OSRS Wiki snapshot of the tradeable items listed in the `Infobox Quest` `items` fields across current quests and miniquests; quest-only rewards are not included.
+- A starter-skilling tool-pool item is guaranteed after every configured number of completed attempts; the default cadence is 100 attempts. The pool includes equipment needed to begin skill actions or gather items, such as Hunter traps, Fletching knives, Fishing equipment, Mining pickaxes, Woodcutting axes, and Tool Leprechaun farming equipment. The cadence resets after a tool roll.
+- Every completed roll unlocks one item. Relational selection changes which pool supplies that item; it does not create empty or dry rolls.
+- Quest items are removed from the normal pool and receive increasing relative weight after each non-quest attempt. A successful quest roll resets that miss streak.
+- If a special pool has no remaining locked items, the selector falls back to the next available pool.
+- Manual rolls advance the same counters as automatic rolls.
+
 ---
 
 ### Automatic Detection
@@ -126,6 +137,11 @@ Open RuneLite’s plugin settings and select **Chance Man** to configure options
     - Toggling either clears cached drop data
 - **Dim locked items**
 - **Dim opacity**
+- **Enable Relational Rolls**
+- **Tool Roll Every X Rolls**
+- **Quest Base Weight**
+- **Quest Weight per Miss**
+- **Quest Weight Cap**
 
 ---
 
@@ -133,6 +149,7 @@ Open RuneLite’s plugin settings and select **Chance Man** to configure options
 
 1. **Enable the Plugin**
     - Enable **Chance Man** in RuneLite.
+    - Enable **Relational Rolls** if you want tool cadence and quest weighting.
     - Tradeable items are automatically detected and locked.
 
 2. **Obtaining Items**
@@ -158,7 +175,11 @@ Progress is stored per character under:
 - **Obtained Items**  
   `chanceman_obtained.json`
 - **Rolled Items**  
-  `chanceman_rolled.json`
+`chanceman_rolled.json`
+
+Relational roll counters are stored as stamped values in RuneLite's Chance Man profile data and follow the existing profile/cloud persistence path.
+
+The relational item definitions are bundled in `src/main/resources/com/chanceman/relational-items.json`. The current snapshot covers 51 selected starter-skilling tool IDs, 215 OSRS Wiki quest/miniquest infoboxes, and 339 quest-requirement IDs that are currently listed on the Grand Exchange. Refresh that file from the live OSRS Wiki and current GE listings when adding or correcting tool and quest item IDs. Pool membership is restricted to GE-listed items at runtime.
 
 ### Legacy Files
 

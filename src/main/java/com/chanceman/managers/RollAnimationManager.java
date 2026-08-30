@@ -3,6 +3,11 @@ package com.chanceman.managers;
 import com.chanceman.ChanceManOverlay;
 import com.chanceman.ChanceManPanel;
 import com.chanceman.ChanceManConfig;
+import com.chanceman.relational.RelationalRollStateManager;
+import com.chanceman.rolls.RelationalRollSelectionStrategy;
+import com.chanceman.rolls.RollSelection;
+import com.chanceman.rolls.RollSelectionStrategy;
+import com.chanceman.rolls.UniformRollSelectionStrategy;
 import lombok.Getter;
 import lombok.Setter;
 import net.runelite.api.ChatMessageType;
@@ -21,13 +26,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
-/**
- * Manages roll animations and result announcements.
- *
- * New domain meanings:
- *  - ObtainedItemsManager = items you have obtained (legacy: Rolled)
- *  - RolledItemsManager   = items that have been rolled/unlocked (legacy: Unlocked)
- */
+/** Manages roll animations and result announcements. */
 @Singleton
 public class RollAnimationManager
 {
@@ -37,6 +36,9 @@ public class RollAnimationManager
 
     @Inject private ObtainedItemsManager obtainedManager;
     @Inject private RolledItemsManager rolledManager;
+    @Inject private RelationalRollStateManager relationalStateManager;
+    @Inject private UniformRollSelectionStrategy uniformRollSelectionStrategy;
+    @Inject private RelationalRollSelectionStrategy relationalRollSelectionStrategy;
 
     @Inject private ChanceManOverlay overlay;
     @Inject private ChanceManConfig config;
@@ -50,17 +52,17 @@ public class RollAnimationManager
 
     private volatile boolean isRolling = false;
 
-    // tradeables gating
     private volatile boolean tradeablesReady = false;
 
     private static final int SNAP_WINDOW_MS = 350;
     private final Random random = new Random();
+    private volatile RollSelection activeSelection =
+            new RollSelection(RollSelection.Type.NORMAL, Collections.emptySet());
 
     @Getter
     @Setter
     private volatile boolean manualRoll = false;
 
-    /** Called by plugin after building tradeables. */
     public void setAllTradeableItems(Set<Integer> allTradeableItems)
     {
         this.allTradeableItems = (allTradeableItems != null) ? allTradeableItems : Collections.emptySet();
@@ -89,7 +91,7 @@ public class RollAnimationManager
     {
         if (!hasTradeablesReady())
         {
-            return; // queue stays intact until tradeables are built
+            return;
         }
 
         if (!isRolling && !rollQueue.isEmpty())
@@ -102,8 +104,8 @@ public class RollAnimationManager
 
     /**
      * Perform the roll animation and announce the result.
-     * The rolled item is selected during the snap window and immediately
-     * marked as ROLLED (legacy: unlocked), while the animation finishes visually.
+     * The selected item is marked as rolled during the snap window while the
+     * animation finishes visually.
      */
     private void performRoll(int obtainedItemId)
     {
@@ -114,6 +116,12 @@ public class RollAnimationManager
         }
 
         int rollDuration = 3000;
+        activeSelection = selectSelection();
+        if (activeSelection.isEmpty())
+        {
+            finishRoll();
+            return;
+        }
         overlay.startRollAnimation(0, rollDuration, this::getRandomLockedItem);
 
         executor.schedule(
@@ -132,7 +140,19 @@ public class RollAnimationManager
     private void completeRoll(int obtainedItemId)
     {
         int rolledItemId = overlay.getFinalItem();
+        if (rolledItemId <= 0)
+        {
+            finishRoll();
+            return;
+        }
         rolledManager.markRolled(rolledItemId);
+        if (config.enableRelationalRolls())
+        {
+            relationalStateManager.recordRoll(
+                    activeSelection.getType() == RollSelection.Type.TOOLS,
+                    activeSelection.getType() == RollSelection.Type.QUEST
+            );
+        }
 
         final boolean wasManual = manualRoll;
 
@@ -191,26 +211,18 @@ public class RollAnimationManager
      */
     private int getRandomLockedItem()
     {
-        if (!hasTradeablesReady())
-        {
-            return overlay.getFinalItem();
-        }
+        int itemId = activeSelection.randomItem(random);
+        return itemId > 0 ? itemId : overlay.getFinalItem();
+    }
 
-        List<Integer> locked = new ArrayList<>();
-        for (int id : allTradeableItems)
-        {
-            if (!rolledManager.isRolled(id))
-            {
-                locked.add(id);
-            }
-        }
-
-        if (locked.isEmpty())
-        {
-            return overlay.getFinalItem();
-        }
-
-        return locked.get(random.nextInt(locked.size()));
+    private RollSelection selectSelection()
+    {
+        Set<Integer> eligible = new LinkedHashSet<>(allTradeableItems);
+        Set<Integer> rolled = rolledManager.getRolledItems();
+        RollSelectionStrategy strategy = config.enableRelationalRolls()
+                ? relationalRollSelectionStrategy
+                : uniformRollSelectionStrategy;
+        return strategy.select(eligible, rolled);
     }
 
     private String getItemName(int itemId)
