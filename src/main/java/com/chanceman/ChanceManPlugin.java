@@ -4,11 +4,11 @@ import com.chanceman.account.AccountChanged;
 import com.chanceman.account.AccountManager;
 import com.chanceman.drops.DropFetcher;
 import com.chanceman.drops.DropCache;
-import com.chanceman.filters.BlockedItems;
 import com.chanceman.filters.EnsouledHeadMapping;
 import com.chanceman.menus.ActionHandler;
 import com.chanceman.filters.ItemsFilter;
 import com.chanceman.menus.TutorialIslandGuard;
+import com.chanceman.rolls.RollPoolManager;
 import com.chanceman.ui.DropsTabUI;
 import com.chanceman.ui.DropsTooltipOverlay;
 import com.chanceman.ui.MusicWidgetController;
@@ -67,6 +67,7 @@ public class ChanceManPlugin extends Plugin
     @Inject private ObtainedItemsManager obtainedItemsManager;
     @Inject private RolledItemsManager rolledItemsManager;
     @Inject private RollAnimationManager rollAnimationManager;
+    @Inject private RollPoolManager rollPoolManager;
     @Inject private EventBus eventBus;
     @Inject private ItemsFilter itemsFilter;
     @Inject private DropsTabUI dropsTabUI;
@@ -133,6 +134,8 @@ public class ChanceManPlugin extends Plugin
         if (accountManager.ready())
         {
             Runnable refreshPanel = () -> {
+                itemDimmerController.invalidateState();
+
                 if (chanceManPanel != null) {
                     SwingUtilities.invokeLater(chanceManPanel::updatePanel);
                 }
@@ -143,11 +146,14 @@ public class ChanceManPlugin extends Plugin
 
             obtainedItemsManager.loadObtainedItems();
             rolledItemsManager.loadRolledItems();
+            rollPoolManager.loadState();
         }
 
         itemDimmerController.setEnabled(config.dimLockedItemsEnabled());
         itemDimmerController.setDimOpacity(config.dimLockedItemsOpacity());
         eventBus.register(itemDimmerController);
+        overlayManager.add(itemDimmerController);
+
         rollAnimationManager.startUp();
         dropsTabUI.startUp();
 
@@ -183,8 +189,10 @@ public class ChanceManPlugin extends Plugin
         eventBus.register(musicWidgetController);
         eventBus.register(musicSearchButton);
         musicSearchButton.onStart();
+
         tradeableItemsInitialized = false;
-        rollAnimationManager.setAllTradeableItems(Collections.<Integer>emptySet());
+        rollAnimationManager.setAllTradeableItems(Collections.emptySet());
+        itemDimmerController.setAllTradeableItems(Collections.emptySet());
     }
 
     private void disableFeatures()
@@ -208,7 +216,11 @@ public class ChanceManPlugin extends Plugin
         eventBus.unregister(musicSearchButton);
         eventBus.unregister(musicWidgetController);
         dropsTabUI.shutDown();
+
         eventBus.unregister(itemDimmerController);
+        itemDimmerController.setEnabled(false);
+        overlayManager.remove(itemDimmerController);
+
         eventBus.unregister(accountManager);
         getInjector().getInstance(ActionHandler.class).shutDown();
 
@@ -242,6 +254,7 @@ public class ChanceManPlugin extends Plugin
                 rolledItemsManager.setOnChange(null);
             }
         }
+
         dropFetcher.shutdown();
         dropCache.shutdown();
 
@@ -250,6 +263,7 @@ public class ChanceManPlugin extends Plugin
         allTradeableItems.clear();
         tradeableItemsInitialized = false;
         rollAnimationManager.setAllTradeableItems(Collections.emptySet());
+        itemDimmerController.setAllTradeableItems(Collections.emptySet());
         accountManager.reset();
     }
 
@@ -271,7 +285,7 @@ public class ChanceManPlugin extends Plugin
             for (int i = 0; i < 40000; i++)
             {
                 ItemComposition comp = itemManager.getItemComposition(i);
-                if (comp != null && comp.isGeTradeable() && !isNotTracked(i)
+                if (comp != null && comp.isGeTradeable()
                         && !ItemsFilter.isBlocked(i, config))
                 {
                     if (config.freeToPlay() && comp.isMembers())
@@ -286,7 +300,9 @@ public class ChanceManPlugin extends Plugin
                     allTradeableItems.add(i);
                 }
             }
+
             rollAnimationManager.setAllTradeableItems(allTradeableItems);
+            itemDimmerController.setAllTradeableItems(allTradeableItems);
 
             // Only now mark initialized (prevents early rolls on login/inventory scan).
             tradeableItemsInitialized = true;
@@ -303,6 +319,7 @@ public class ChanceManPlugin extends Plugin
     {
         if (!featuresActive) return;
         if (!event.getGroup().equals("chanceman")) return;
+
         switch (event.getKey())
         {
             case "freeToPlay":
@@ -312,18 +329,21 @@ public class ChanceManPlugin extends Plugin
             case "requireWeaponPoison":
                 refreshTradeableItems();
                 break;
+
             case "showRareDropTable":
             case "showGemDropTable":
                 dropCache.clearAllCaches();
                 refreshDropsViewerIfOpen();
                 break;
+
             case "sortDropsByRarity":
                 refreshDropsViewerIfOpen();
                 break;
+
             case "dimLockedItemsEnabled":
             case "dimLockedItemsOpacity":
-                itemDimmerController.setEnabled(config.dimLockedItemsEnabled());
                 itemDimmerController.setDimOpacity(config.dimLockedItemsOpacity());
+                itemDimmerController.setEnabled(config.dimLockedItemsEnabled());
                 break;
         }
     }
@@ -339,8 +359,11 @@ public class ChanceManPlugin extends Plugin
 
         obtainedItemsManager.loadObtainedItems();
         rolledItemsManager.loadRolledItems();
+        rollPoolManager.loadState();
 
+        itemDimmerController.invalidateState();
         refreshTradeableItems();
+
         if (chanceManPanel != null)
         {
             SwingUtilities.invokeLater(chanceManPanel::updatePanel);
@@ -354,6 +377,7 @@ public class ChanceManPlugin extends Plugin
     public void onGameTick(GameTick event)
     {
         if (!featuresActive) return;
+
         if (!tradeableItemsInitialized && client.getGameState() == GameState.LOGGED_IN)
         {
             refreshTradeableItems();
@@ -369,7 +393,11 @@ public class ChanceManPlugin extends Plugin
     public void onScriptPostFired(ScriptPostFired event)
     {
         if (!featuresActive) return;
-        if (event.getScriptId() == GE_SEARCH_BUILD_SCRIPT) { killSearchResults(); }
+
+        if (event.getScriptId() == GE_SEARCH_BUILD_SCRIPT)
+        {
+            killSearchResults();
+        }
     }
 
     private void killSearchResults()
@@ -379,20 +407,24 @@ public class ChanceManPlugin extends Plugin
         {
             return;
         }
+
         Widget[] children = geSearchResults.getDynamicChildren();
         if (children == null || children.length < 2 || children.length % 3 != 0)
         {
             return;
         }
+
         Set<Integer> obtained = obtainedItemsManager.getObtainedItems();
         Set<Integer> rolled = rolledItemsManager.getRolledItems();
         boolean requireRolled = config.requireRolledUnlockedForGe();
+
         for (int i = 0; i < children.length; i += 3)
         {
             int offerItemId = children[i + 2].getItemId();
             boolean isObtained = obtained.contains(offerItemId);
             boolean isRolled = rolled.contains(offerItemId);
             boolean hide = requireRolled ? !(isObtained && isRolled) : !isRolled;
+
             if (hide)
             {
                 children[i].setHidden(true);
@@ -419,16 +451,16 @@ public class ChanceManPlugin extends Plugin
         int itemId = EnsouledHeadMapping.toTradeableId(tileItem.getId());
         int canonicalItemId = itemManager.canonicalize(itemId);
 
-        if (!isGeTradeable(canonicalItemId)
-                || isNotTracked(canonicalItemId)
-                || BlockedItems.getBLOCKED_ITEMS().contains(canonicalItemId))
+        if (!isInPlay(canonicalItemId))
         {
             return;
         }
+
         if (tileItem.getOwnership() != TileItem.OWNERSHIP_SELF)
         {
             return;
         }
+
         if (!obtainedItemsManager.isObtained(canonicalItemId))
         {
             obtainedItemsManager.markObtained(canonicalItemId);
@@ -445,20 +477,20 @@ public class ChanceManPlugin extends Plugin
         if (event.getContainerId() == 93)
         {
             Set<Integer> processed = new HashSet<>();
+
             for (net.runelite.api.Item item : event.getItemContainer().getItems())
             {
                 int rawItemId = item.getId();
                 int mapped = EnsouledHeadMapping.toTradeableId(rawItemId);
                 int canonicalId = itemManager.canonicalize(mapped);
 
-                if (!isGeTradeable(canonicalId)
-                        || isNotTracked(canonicalId)
-                        || BlockedItems.getBLOCKED_ITEMS().contains(canonicalId))
+                if (!isInPlay(canonicalId))
                 {
                     continue;
                 }
 
-                if (!processed.contains(canonicalId) && !obtainedItemsManager.isObtained(canonicalId))
+                if (!processed.contains(canonicalId)
+                        && !obtainedItemsManager.isObtained(canonicalId))
                 {
                     obtainedItemsManager.markObtained(canonicalId);
                     rollAnimationManager.enqueueRoll(canonicalId);
@@ -492,18 +524,6 @@ public class ChanceManPlugin extends Plugin
         {
             musicWidgetController.override(musicWidgetController.getCurrentData());
         }
-    }
-
-    public boolean isGeTradeable(int itemId)
-    {
-        ItemComposition comp = itemManager.getItemComposition(itemId);
-        return comp != null && comp.isGeTradeable();
-    }
-
-    public boolean isNotTracked(int itemId)
-    {
-        return itemId == 995 || itemId == 13191 || itemId == 13190 ||
-                itemId == 7587 || itemId == 7588 || itemId == 7589 || itemId == 7590 || itemId == 7591;
     }
 
     public boolean isInPlay(int itemId)

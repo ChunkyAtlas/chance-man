@@ -3,7 +3,6 @@ package com.chanceman.menus;
 import com.chanceman.ChanceManConfig;
 import com.chanceman.ChanceManPlugin;
 import com.chanceman.filters.EnsouledHeadMapping;
-import com.chanceman.filters.BlockedItems;
 import com.chanceman.managers.RolledItemsManager;
 import lombok.Getter;
 import lombok.Setter;
@@ -99,9 +98,7 @@ public class ActionHandler {
             int mapped = EnsouledHeadMapping.toTradeableId(rawItemId);
             int canonicalGroundId = itemManager.canonicalize(mapped);
 
-            if (plugin.isGeTradeable(canonicalGroundId)
-                    && !plugin.isNotTracked(canonicalGroundId)
-                    && !BlockedItems.getBLOCKED_ITEMS().contains(canonicalGroundId)
+            if (plugin.isInPlay(canonicalGroundId)
                     && rolledItemsManager != null
                     && !rolledItemsManager.isRolled(canonicalGroundId))
                 event.consume();
@@ -191,12 +188,10 @@ public class ActionHandler {
 
     /**
      * @param itemId canonicalized item ID of a ground item
-     * @return true if it’s tradeable, tracked, and still locked
+     * @return true if it is in play and still locked
      */
     private boolean isLockedGroundItem(int itemId) {
-        return plugin.isGeTradeable(itemId)
-                && !plugin.isNotTracked(itemId)
-                && !BlockedItems.getBLOCKED_ITEMS().contains(itemId)
+        return plugin.isInPlay(itemId)
                 && !rolledItemsManager.isRolled(itemId);
     }
 

@@ -3,6 +3,7 @@ package com.chanceman.managers;
 import com.chanceman.ChanceManOverlay;
 import com.chanceman.ChanceManPanel;
 import com.chanceman.ChanceManConfig;
+import com.chanceman.rolls.RollPoolManager;
 import lombok.Getter;
 import lombok.Setter;
 import net.runelite.api.ChatMessageType;
@@ -19,6 +20,7 @@ import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -31,12 +33,13 @@ import java.util.concurrent.TimeUnit;
 @Singleton
 public class RollAnimationManager
 {
+    private static final int SNAP_WINDOW_MS = 350;
     @Inject private ItemManager itemManager;
     @Inject private Client client;
     @Inject private ClientThread clientThread;
 
-    @Inject private ObtainedItemsManager obtainedManager;
     @Inject private RolledItemsManager rolledManager;
+    @Inject private RollPoolManager rollPoolManager;
 
     @Inject private ChanceManOverlay overlay;
     @Inject private ChanceManConfig config;
@@ -48,13 +51,13 @@ public class RollAnimationManager
     private final Queue<Integer> rollQueue = new ConcurrentLinkedQueue<>();
     private ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
+    @Getter
     private volatile boolean isRolling = false;
 
     // tradeables gating
     private volatile boolean tradeablesReady = false;
 
-    private static final int SNAP_WINDOW_MS = 350;
-    private final Random random = new Random();
+    private volatile List<Integer> activeRollPool = Collections.emptyList();
 
     @Getter
     @Setter
@@ -63,13 +66,15 @@ public class RollAnimationManager
     /** Called by plugin after building tradeables. */
     public void setAllTradeableItems(Set<Integer> allTradeableItems)
     {
-        this.allTradeableItems = (allTradeableItems != null) ? allTradeableItems : Collections.emptySet();
+        this.allTradeableItems = (allTradeableItems != null)
+                ? Collections.unmodifiableSet(new LinkedHashSet<>(allTradeableItems))
+                : Collections.emptySet();
         this.tradeablesReady = !this.allTradeableItems.isEmpty();
     }
 
     public boolean hasTradeablesReady()
     {
-        return tradeablesReady && allTradeableItems != null && !allTradeableItems.isEmpty();
+        return tradeablesReady && !allTradeableItems.isEmpty();
     }
 
     /**
@@ -87,17 +92,19 @@ public class RollAnimationManager
      */
     public void process()
     {
-        if (!hasTradeablesReady())
+        if (!hasTradeablesReady() || isRolling)
         {
             return; // queue stays intact until tradeables are built
         }
 
-        if (!isRolling && !rollQueue.isEmpty())
+        Integer obtainedItemId = rollQueue.poll();
+        if (obtainedItemId == null)
         {
-            int obtainedItemId = rollQueue.poll();
-            isRolling = true;
-            executor.submit(() -> performRoll(obtainedItemId));
+            return;
         }
+
+        isRolling = true;
+        executor.submit(() -> performRoll(obtainedItemId));
     }
 
     /**
@@ -113,11 +120,33 @@ public class RollAnimationManager
             return;
         }
 
+        boolean toolGuaranteeEnabled = config.enableToolRollGuarantee();
+        boolean questItemRollsEnabled = config.enableQuestItemRolls();
+        boolean wasManual = manualRoll;
+
+        activeRollPool = rollPoolManager.selectPool(
+                allTradeableItems,
+                rolledManager.getRolledItems(),
+                toolGuaranteeEnabled,
+                questItemRollsEnabled
+        );
+
+        if (activeRollPool.isEmpty())
+        {
+            finishRoll();
+            return;
+        }
+
         int rollDuration = 3000;
         overlay.startRollAnimation(0, rollDuration, this::getRandomLockedItem);
 
         executor.schedule(
-                () -> completeRoll(obtainedItemId),
+                () -> completeRoll(
+                        obtainedItemId,
+                        wasManual,
+                        toolGuaranteeEnabled,
+                        questItemRollsEnabled
+                ),
                 rollDuration + SNAP_WINDOW_MS,
                 TimeUnit.MILLISECONDS
         );
@@ -129,12 +158,25 @@ public class RollAnimationManager
         );
     }
 
-    private void completeRoll(int obtainedItemId)
+    private void completeRoll(
+            int obtainedItemId,
+            boolean wasManual,
+            boolean toolGuaranteeEnabled,
+            boolean questItemRollsEnabled)
     {
         int rolledItemId = overlay.getFinalItem();
-        rolledManager.markRolled(rolledItemId);
+        if (rolledItemId <= 0 || rolledManager.isRolled(rolledItemId))
+        {
+            finishRoll();
+            return;
+        }
 
-        final boolean wasManual = manualRoll;
+        rolledManager.markRolled(rolledItemId);
+        rollPoolManager.recordCompletedRoll(
+                rolledItemId,
+                toolGuaranteeEnabled,
+                questItemRollsEnabled
+        );
 
         clientThread.invoke(() ->
         {
@@ -177,13 +219,9 @@ public class RollAnimationManager
 
     private void finishRoll()
     {
+        activeRollPool = Collections.emptyList();
         manualRoll = false;
         isRolling = false;
-    }
-
-    public boolean isRolling()
-    {
-        return isRolling;
     }
 
     /**
@@ -191,26 +229,13 @@ public class RollAnimationManager
      */
     private int getRandomLockedItem()
     {
-        if (!hasTradeablesReady())
+        List<Integer> pool = activeRollPool;
+        if (pool.isEmpty())
         {
             return overlay.getFinalItem();
         }
 
-        List<Integer> locked = new ArrayList<>();
-        for (int id : allTradeableItems)
-        {
-            if (!rolledManager.isRolled(id))
-            {
-                locked.add(id);
-            }
-        }
-
-        if (locked.isEmpty())
-        {
-            return overlay.getFinalItem();
-        }
-
-        return locked.get(random.nextInt(locked.size()));
+        return pool.get(ThreadLocalRandom.current().nextInt(pool.size()));
     }
 
     private String getItemName(int itemId)
@@ -229,6 +254,10 @@ public class RollAnimationManager
 
     public void shutdown()
     {
+        rollQueue.clear();
+        activeRollPool = Collections.emptyList();
+        manualRoll = false;
+        isRolling = false;
         executor.shutdownNow();
     }
 }

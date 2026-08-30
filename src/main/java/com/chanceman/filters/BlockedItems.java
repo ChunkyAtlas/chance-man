@@ -356,6 +356,16 @@ public final class BlockedItems {
         blocked.add(ItemID.LEAGUE_6_BUTLER_SCROLL); // Demonic pacts demon butler scroll
         blocked.add(ItemID.DEMONIC_SKIN_ORNAMENT_KIT); //Demonic skin contract
 
+        // Non-rollable Items
+        blocked.add(ItemID.COINS); // Coins
+        blocked.add(ItemID.OSRS_BOND); // Old school bond
+        blocked.add(ItemID.BOUGHT_OSRS_BOND); // Old school bond
+        blocked.add(ItemID.MACRO_DIGGER_COFFIN_OBJECT_1); // Coffin
+        blocked.add(ItemID.MACRO_DIGGER_COFFIN_OBJECT_2); // Coffin
+        blocked.add(ItemID.MACRO_DIGGER_COFFIN_OBJECT_3); // Coffin
+        blocked.add(ItemID.MACRO_DIGGER_COFFIN_OBJECT_4); // Coffin
+        blocked.add(ItemID.MACRO_DIGGER_COFFIN_OBJECT_5); // Coffin
+
         BLOCKED_ITEMS = Collections.unmodifiableSet(blocked);
     }
 }
