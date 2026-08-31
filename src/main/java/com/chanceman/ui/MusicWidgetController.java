@@ -377,6 +377,7 @@ public class MusicWidgetController
 
         if (title != null)
         {
+            setHiddenPreservingState(title, false);
             title.setText(dropData.getName());
             title.revalidate();
         }
