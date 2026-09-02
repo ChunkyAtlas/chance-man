@@ -34,6 +34,7 @@ public class MusicWidgetController
     private static final int BAR_HEIGHT = 15;
     private static final int EYE_SIZE = 20;
     private static final int SEARCH_SPRITE = 1113;
+    private static final int MUSIC_LIST_REDRAW_SCRIPT = 9289;
 
     private static final int[] HIDE_DURING_OVERRIDE =
             {
@@ -791,19 +792,15 @@ public class MusicWidgetController
 
     private void redrawNativeMusicList()
     {
-        Widget inner = widget(InterfaceID.Music.INNER);
-
-        if (inner == null)
-        {
-            return;
-        }
-
-        Object[] listener = inner.getOnVarTransmitListener();
-
-        if (listener != null)
-        {
-            client.runScript(listener);
-        }
+        client.runScript(
+                MUSIC_LIST_REDRAW_SCRIPT,
+                InterfaceID.Music.INNER,
+                InterfaceID.Music.JUKEBOX,
+                InterfaceID.Music.SCROLLABLE,
+                InterfaceID.Music.SCROLLBAR,
+                InterfaceID.Music.COUNT,
+                InterfaceID.Music.OVERLAY
+        );
 
         Widget scrollable = widget(InterfaceID.Music.SCROLLABLE);
 
