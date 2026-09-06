@@ -4,8 +4,6 @@ import com.chanceman.ChanceManConfig;
 import com.chanceman.ChanceManPlugin;
 import com.chanceman.filters.EnsouledHeadMapping;
 import com.chanceman.managers.RolledItemsManager;
-import lombok.Getter;
-import lombok.Setter;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
 import net.runelite.api.Item;
@@ -18,8 +16,6 @@ import net.runelite.api.WorldView;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.MenuOptionClicked;
-import net.runelite.api.events.WidgetClosed;
-import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.gameval.InterfaceID;
 import net.runelite.api.gameval.InventoryID;
 import net.runelite.api.gameval.ItemID;
@@ -28,6 +24,7 @@ import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
 import net.runelite.client.util.Text;
+import net.runelite.api.widgets.Widget;
 
 import javax.inject.Inject;
 import javax.inject.Singleton;
@@ -78,9 +75,6 @@ public class ActionHandler {
     private Restrictions restrictions;
     @Inject
     private RolledItemsManager rolledItemsManager;
-    @Getter
-    @Setter
-    private int enabledUIOpen = -1;
 
     /**
      * A static helper to further safeguard ground item actions.
@@ -103,6 +97,15 @@ public class ActionHandler {
                     && !rolledItemsManager.isRolled(canonicalGroundId))
                 event.consume();
         }
+    }
+
+    private EnabledUI getEnabledUI(MenuEntry entry) {
+        Widget widget = entry.getWidget();
+        if (widget == null) return null;
+
+        int groupId = widget.getId() >>> 16;
+        if (groupId == InterfaceID.BANKSIDE) return EnabledUI.BANK;
+        return EnabledUI.fromGroupId(groupId);
     }
 
     /**
@@ -138,24 +141,13 @@ public class ActionHandler {
     }
 
     @Subscribe
-    public void onWidgetClosed(WidgetClosed event) {
-        if (event.getGroupId() == enabledUIOpen) enabledUIOpen = -1;
-    }
-
-    @Subscribe
-    public void onWidgetLoaded(WidgetLoaded event) {
-        if (EnabledUI.fromGroupId(event.getGroupId()) != null)
-            enabledUIOpen = event.getGroupId();
-    }
-
-    @Subscribe
     public void onMenuEntryAdded(MenuEntryAdded event) {
         if (inactive()) return;
 
-        EnabledUI ui = enabledUIOpen == -1 ? null : EnabledUI.fromGroupId(enabledUIOpen);
-        if (ui != null && !ui.isGreyLockedItems()) return;
-
         MenuEntry entry = event.getMenuEntry();
+        EnabledUI ui = getEnabledUI(entry);
+        if (ui != null && (ui.isAllowAllActions() || !ui.isGreyLockedItems())) return;
+
         MenuAction action = entry.getType();
         int id = getItemId(event, entry);
         boolean enabled = GROUND_ACTIONS.contains(action)

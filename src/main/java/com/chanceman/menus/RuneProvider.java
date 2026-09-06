@@ -11,6 +11,7 @@ public enum RuneProvider
 {
 	// Banana (yeah)
 	BANANA(ItemID.BANANA),
+	UNPOWERED_ORB(ItemID.STAFFORB),
 
 	// Runes
 	AIR_RUNE(ItemID.AIRRUNE),

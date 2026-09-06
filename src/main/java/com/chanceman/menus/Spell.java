@@ -119,6 +119,7 @@ public enum Spell
 	CEMETERY_TELEPORT("Cemetery Teleport"),
 	BARROWS_TELEPORT("Barrows Teleport"),
 	TELEPORT_TO_TARGET_ARC("Teleport to Target"),
+	TELEPORT_TO_BOAT("Teleport to Boat"),
 	GHOSTLY_GRASP("Ghostly Grasp"),
 	SKELETAL_GRASP("Skeletal Grasp"),
 	UNDEAD_GRASP("Undead Grasp"),

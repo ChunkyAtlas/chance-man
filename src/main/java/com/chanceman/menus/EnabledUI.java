@@ -1,7 +1,6 @@
 package com.chanceman.menus;
 
 import lombok.Getter;
-import net.runelite.api.annotations.Interface;
 import net.runelite.api.gameval.InterfaceID;
 
 @Getter
@@ -13,7 +12,9 @@ public enum EnabledUI
 	Crafting_Gold(InterfaceID.CraftingGold.UNIVERSE, false, true),
 	TTREK_REWARDS(InterfaceID.TREK_REWARDS,false, true),
 	SKILLMULTI(InterfaceID.Skillmulti.ALL, false, true),
-	RUNEDOKU(InterfaceID.ROGUETRADER_SUDOKU, false, true);
+	RUNEDOKU(InterfaceID.ROGUETRADER_SUDOKU, false, true),
+	MTA_SHOP(InterfaceID.MAGICTRAINING_SHOP,false, true),
+	GUARDIANS_OF_THE_RIFT(InterfaceID.GOTR_HUD, false, true);
 
 	private final int id; // group id
 	private final boolean greyLockedItems; // should grey/disable locked items in this UI
