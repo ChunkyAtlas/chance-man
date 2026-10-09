@@ -124,6 +124,16 @@ public enum Flatpacks {
     Teakfancydressbox(ItemID.POH_FLATPACK_FANCY_DRESS_BOX2),
     Mahoganyfancydressbox(ItemID.POH_FLATPACK_FANCY_DRESS_BOX3);
 
+    private static final Set<Integer> IDS;
+
+    static {
+        Set<Integer> ids = new HashSet<>();
+        for (Flatpacks fp : Flatpacks.values()) {
+            ids.add(fp.getId());
+        }
+        IDS = Collections.unmodifiableSet(ids);
+    }
+
     @Getter
     private final int id;
 
@@ -135,11 +145,7 @@ public enum Flatpacks {
      * Returns an unmodifiable set of all flatpack item IDs.
      */
     public static Set<Integer> getAllFlatpackIds() {
-        Set<Integer> ids = new HashSet<>();
-        for (Flatpacks fp : Flatpacks.values()) {
-            ids.add(fp.getId());
-        }
-        return Collections.unmodifiableSet(ids);
+        return IDS;
     }
 
     /**

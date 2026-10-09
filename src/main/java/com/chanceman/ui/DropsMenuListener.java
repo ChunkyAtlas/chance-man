@@ -53,9 +53,7 @@ public class DropsMenuListener
             {
                 try
                 {
-                    NPC possible = client.getTopLevelWorldView()
-                            .npcs()
-                            .byIndex(e.getIdentifier());
+                    NPC possible = e.getNpc();
                     if (possible != null && possible.getCombatLevel() > 0)
                     {
                         target = possible;

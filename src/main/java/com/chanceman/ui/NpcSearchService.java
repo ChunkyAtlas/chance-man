@@ -129,7 +129,12 @@ public class NpcSearchService {
      * are returned as separate NpcDropData results with their own NPC IDs.
      */
     public List<NpcDropData> search(String query) {
-        ParsedQuery pq = parse(query);
+        ParsedQuery pq;
+        try {
+            pq = parse(query);
+        } catch (NumberFormatException ignored) {
+            return Collections.emptyList();
+        }
         if (pq == null) {
             return Collections.emptyList();
         }

@@ -43,7 +43,9 @@ public class Restrictions
 
 	private boolean isInFountainArea()
 	{
-		WorldPoint lp = client.getLocalPlayer().getWorldLocation();
+		Player player = client.getLocalPlayer();
+		if (player == null) return false;
+		WorldPoint lp = player.getWorldLocation();
 		return FOUNTAIN_OF_RUNE_AREA.contains(lp);
 	}
 
@@ -139,6 +141,89 @@ public class Restrictions
 		return enabledSkillOps.contains(op);
 	}
 
+	public boolean isBlackjackEnabled()
+	{
+		ItemContainer equipment = client.getItemContainer(InventoryID.WORN);
+		Item weapon = equipment == null
+				? null
+				: equipment.getItem(EquipmentInventorySlot.WEAPON.getSlotIdx());
+		SkillItem blackjack = weapon == null ? null : SkillItem.fromId(weapon.getId());
+		if (blackjack == null) return false;
+
+		switch (blackjack)
+		{
+			case OAK_BLACKJACK:
+			case OAK_BLACKJACK_O:
+			case OAK_BLACKJACK_D:
+			case WILLOW_BLACKJACK:
+			case WILLOW_BLACKJACK_O:
+			case WILLOW_BLACKJACK_D:
+			case MAPLE_BLACKJACK:
+			case MAPLE_BLACKJACK_O:
+			case MAPLE_BLACKJACK_D:
+				return !blackjack.isRequiresUnlock() || !shouldSkipItem(weapon.getId());
+			default:
+				return false;
+		}
+	}
+
+	public boolean isFlyFishingEnabled()
+	{
+		return isInventoryItemEnabled(ItemID.FLY_FISHING_ROD)
+				|| hasInventoryItem(ItemID.FISHINGROD_PEARL_FLY)
+				|| hasEquippedItem(ItemID.FISHINGROD_PEARL_FLY, EquipmentInventorySlot.WEAPON);
+	}
+
+	public boolean isBaitFishingEnabled()
+	{
+		return isBaitFishingRodEnabled() && isInventoryItemEnabled(ItemID.FISHING_BAIT);
+	}
+
+	public boolean isAnglerfishFishingEnabled()
+	{
+		int bait = hasInventoryItem(ItemID.DIABOLIC_WORMS)
+				? ItemID.DIABOLIC_WORMS
+				: ItemID.PISCARILIUS_SANDWORMS;
+		return isBaitFishingRodEnabled() && isInventoryItemEnabled(bait);
+	}
+
+	public boolean isBarroniteSmithingEnabled()
+	{
+		return isInventoryItemEnabled(ItemID.HAMMER)
+				|| hasInventoryItem(ItemID.IMCANDO_HAMMER)
+				|| hasInventoryItem(ItemID.IMCANDO_HAMMER_OFFHAND)
+				|| hasEquippedItem(ItemID.IMCANDO_HAMMER, EquipmentInventorySlot.WEAPON)
+				|| hasEquippedItem(ItemID.IMCANDO_HAMMER_OFFHAND, EquipmentInventorySlot.SHIELD);
+	}
+
+	private boolean isBaitFishingRodEnabled()
+	{
+		return isInventoryItemEnabled(ItemID.FISHING_ROD)
+				|| hasInventoryItem(ItemID.OILY_FISHING_ROD)
+				|| hasInventoryItem(ItemID.FISHINGROD_PEARL)
+				|| hasInventoryItem(ItemID.FISHINGROD_PEARL_OILY)
+				|| hasEquippedItem(ItemID.FISHINGROD_PEARL, EquipmentInventorySlot.WEAPON)
+				|| hasEquippedItem(ItemID.FISHINGROD_PEARL_OILY, EquipmentInventorySlot.WEAPON);
+	}
+
+	private boolean isInventoryItemEnabled(int itemId)
+	{
+		return hasInventoryItem(itemId) && !shouldSkipItem(itemId);
+	}
+
+	private boolean hasInventoryItem(int itemId)
+	{
+		ItemContainer inventory = client.getItemContainer(InventoryID.INV);
+		return inventory != null && inventory.contains(itemId);
+	}
+
+	private boolean hasEquippedItem(int itemId, EquipmentInventorySlot slot)
+	{
+		ItemContainer equipment = client.getItemContainer(InventoryID.WORN);
+		Item item = equipment == null ? null : equipment.getItem(slot.getSlotIdx());
+		return item != null && item.getId() == itemId;
+	}
+
 	public boolean isAnyNetEnabled()
 	{
 		return enabledSkillOps.contains(SkillOp.SMALL_NET)
@@ -190,6 +275,7 @@ public class Restrictions
 
 		for (Widget child : children)
 		{
+			if (child == null) continue;
 			int id = child.getItemId();
 			if (id == -1) continue;
 

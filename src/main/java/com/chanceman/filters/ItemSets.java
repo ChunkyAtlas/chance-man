@@ -162,6 +162,16 @@ public enum ItemSets {
     // Leagues item sets are omitted as they are globally blocked
     SunfireFanatic(ItemID.SET_SUNFIRE_FANATIC);
 
+    private static final Set<Integer> IDS;
+
+    static {
+        Set<Integer> ids = new HashSet<>();
+        for (ItemSets as : ItemSets.values()) {
+            ids.add(as.getId());
+        }
+        IDS = Collections.unmodifiableSet(ids);
+    }
+
     @Getter
     private final int id;
 
@@ -173,11 +183,7 @@ public enum ItemSets {
      * Returns an unmodifiable set of all item set item IDs.
      */
     public static Set<Integer> getAllItemSetIds() {
-        Set<Integer> ids = new HashSet<>();
-        for (ItemSets as : ItemSets.values()) {
-            ids.add(as.getId());
-        }
-        return Collections.unmodifiableSet(ids);
+        return IDS;
     }
 
     /**

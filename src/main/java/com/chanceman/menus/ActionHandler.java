@@ -23,6 +23,7 @@ import net.runelite.api.gameval.ObjectID;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.game.ItemManager;
+import net.runelite.client.game.FishingSpot;
 import net.runelite.client.util.Text;
 import net.runelite.api.widgets.Widget;
 
@@ -282,8 +283,36 @@ public class ActionHandler {
                 && target.toLowerCase().contains("fishing spot"))
             return isNetFishingEnabled(entry);
 
-        if (SkillOp.isSkillOp(option))
+        if ((option.equalsIgnoreCase("lure") && hasNpcAction(entry, "Knock-Out"))
+                || (option.equalsIgnoreCase("knock-out") && hasNpcAction(entry, "Lure")))
+            return restrictions.isBlackjackEnabled();
+
+        if (option.equalsIgnoreCase("lure")
+                && target.toLowerCase().contains("fishing spot"))
+            return restrictions.isFlyFishingEnabled();
+
+        if (option.equalsIgnoreCase("bait") && entry.getNpc() != null
+                && FishingSpot.findSpot(entry.getNpc().getId()) == FishingSpot.ANGLERFISH)
+            return restrictions.isAnglerfishFishingEnabled();
+
+        if (option.equalsIgnoreCase("bait")
+                && target.toLowerCase().contains("fishing spot")
+                && (hasNpcAction(entry, "Lure")
+                || (entry.getNpc() != null
+                && FishingSpot.findSpot(entry.getNpc().getId()) == FishingSpot.SHRIMP)))
+            return restrictions.isBaitFishingEnabled();
+
+        if (option.equalsIgnoreCase("smith") && GAME_OBJECT_ACTIONS.contains(action)
+                && entry.getIdentifier() == ObjectID.CAMDOZAAL_ANVIL)
+            return restrictions.isBarroniteSmithingEnabled();
+
+        if (SkillOp.isSkillOp(option)) {
+            if (SkillOp.fromString(option) == SkillOp.FIRE
+                    && !target.toLowerCase().contains("pottery oven"))
+                return true;
+
             return restrictions.isSkillOpEnabled(option);
+        }
 
         if (Spell.isSpell(option))
             return restrictions.isSpellOpEnabled(option);
@@ -301,20 +330,26 @@ public class ActionHandler {
     }
 
     private boolean isNetFishingEnabled(MenuEntry entry) {
-        NPC npc = entry.getNpc();
-        if (npc != null) {
-            NPCComposition composition = npc.getTransformedComposition();
-            if (composition == null) composition = npc.getComposition();
+        SkillOp net = hasNpcAction(entry, "Harpoon") ? SkillOp.BIG_NET : SkillOp.SMALL_NET;
+        return restrictions.isSkillOpEnabled(net.getOption());
+    }
 
-            String[] actions = composition.getActions();
-            if (actions != null) {
-                for (String npcAction : actions)
-                    if ("Harpoon".equalsIgnoreCase(npcAction))
-                        return restrictions.isSkillOpEnabled(SkillOp.BIG_NET.getOption());
-            }
+    private boolean hasNpcAction(MenuEntry entry, String action) {
+        NPC npc = entry.getNpc();
+        if (npc == null) return false;
+
+        NPCComposition composition = npc.getTransformedComposition();
+        if (composition == null) composition = npc.getComposition();
+        if (composition == null) return false;
+
+        String[] actions = composition.getActions();
+        if (actions != null) {
+            for (String npcAction : actions)
+                if (action.equalsIgnoreCase(npcAction))
+                    return true;
         }
 
-        return restrictions.isSkillOpEnabled(SkillOp.SMALL_NET.getOption());
+        return false;
     }
 
     /**

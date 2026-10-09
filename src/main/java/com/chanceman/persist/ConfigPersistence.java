@@ -71,7 +71,7 @@ public final class ConfigPersistence
         {
             Set<Integer> parsed = gson.fromJson(rawData, SET_TYPE);
             long ts = parseLongSafe(rawTs);
-            return new StampedSet((parsed != null) ? parsed : new LinkedHashSet<>(), ts);
+            return new StampedSet(parsed, ts);
         }
         catch (Exception ignored)
         {

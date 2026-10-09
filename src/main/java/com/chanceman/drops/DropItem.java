@@ -70,10 +70,9 @@ public class DropItem {
                 .replace("×", "x")
                 .replace(",", "")
                 .replace("≈", "")
-                .replace("~", "")
-                .replaceAll(PAREN.pattern(), "")
-                .replaceAll(IN_SYNT.pattern(), "/")
-                .trim();
+                .replace("~", "");
+        cleaned = PAREN.matcher(cleaned).replaceAll("");
+        cleaned = IN_SYNT.matcher(cleaned).replaceAll("/").trim();
 
         // Handle ranges like "1/128 – 1/64"
         String[] range = cleaned.split("\\s*[–—-]\\s*");

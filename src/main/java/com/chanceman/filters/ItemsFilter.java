@@ -45,10 +45,4 @@ public class ItemsFilter {
     public static boolean isPoisonEligible(int itemId, boolean requireWeaponPoison, Set<Integer> unlockedItems) {
         return PoisonWeapons.isPoisonVariantEligible(itemId, requireWeaponPoison, unlockedItems);
     }
-
-    private static boolean isGlobalWeaponPoison(int itemId) {
-        return itemId == PoisonWeapons.WEAPON_POISON.getBaseId() ||
-                itemId == PoisonWeapons.WEAPON_POISON_.getBaseId() ||
-                itemId == PoisonWeapons.WEAPON_POISON__.getBaseId();
-    }
 }

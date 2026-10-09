@@ -48,7 +48,7 @@ public class RolledItemsManager
     private volatile boolean configWriteWarned = false;
     private volatile boolean dirty = false;
 
-    private WatchService watchService;
+    private volatile WatchService watchService;
     private volatile boolean watcherRunning = false;
     private volatile long lastSelfWriteMs = 0L;
     private Thread watcherThread;
@@ -59,10 +59,7 @@ public class RolledItemsManager
     /** Return an immutable snapshot to avoid leaking the synchronizedSet. */
     public Set<Integer> getRolledItems()
     {
-        synchronized (rolledItems)
-        {
-            return Collections.unmodifiableSet(new LinkedHashSet<>(rolledItems));
-        }
+        return Collections.unmodifiableSet(snapshotRolled());
     }
 
     public void markRolled(int itemId)
@@ -78,7 +75,7 @@ public class RolledItemsManager
     /** Initial load + LWW reconciliation. */
     public void loadRolledItems()
     {
-        reconcileWithCloud(false);
+        reconcileWithCloud();
         safeNotifyChange();
     }
 
@@ -89,7 +86,7 @@ public class RolledItemsManager
     }
 
     /** Start watching the JSON on a dedicated daemon thread. */
-    public void startWatching()
+    public synchronized void startWatching()
     {
         if (watcherRunning) return;
         Path file = safeGetFilePathOrNull(FILE_NAME);
@@ -114,13 +111,14 @@ public class RolledItemsManager
 
         watcherRunning = true;
         final String target = file.getFileName().toString();
-        watcherThread = new Thread(() -> runWatcherLoop(target), "ChanceMan-Rolled-Watcher");
+        final WatchService service = watchService;
+        watcherThread = new Thread(() -> runWatcherLoop(target, service), "ChanceMan-Rolled-Watcher");
         watcherThread.setDaemon(true);
         watcherThread.start();
     }
 
     /** Stop watching the JSON. */
-    public void stopWatching()
+    public synchronized void stopWatching()
     {
         watcherRunning = false;
         closeWatchServiceQuietly();
@@ -152,7 +150,7 @@ public class RolledItemsManager
         }
     }
 
-    private void reconcileWithCloud(boolean runtime)
+    private void reconcileWithCloud()
     {
         String player = accountManager.getPlayerName();
         if (player == null) return;
@@ -301,13 +299,10 @@ public class RolledItemsManager
 
     private boolean isExecutorAvailable()
     {
-        if (executor == null) return false;
-        if (executor instanceof java.util.concurrent.ThreadPoolExecutor)
-        {
-            java.util.concurrent.ThreadPoolExecutor tpe = (java.util.concurrent.ThreadPoolExecutor) executor;
-            return !tpe.isShutdown() && !tpe.isTerminated();
-        }
-        return true;
+        ExecutorService currentExecutor = executor;
+        return currentExecutor != null
+                && !currentExecutor.isShutdown()
+                && !currentExecutor.isTerminated();
     }
 
     private void safeNotifyChange()
@@ -427,15 +422,15 @@ public class RolledItemsManager
         watchService = null;
     }
 
-    private void runWatcherLoop(String target)
+    private void runWatcherLoop(String target, WatchService service)
     {
         long lastHandled = 0L;
         try
         {
-            while (watcherRunning)
+            while (watcherRunning && watchService == service)
             {
                 WatchKey key;
-                try { key = watchService.take(); }
+                try { key = service.take(); }
                 catch (InterruptedException | ClosedWatchServiceException ie) { break; }
 
                 boolean relevant = false;
@@ -448,6 +443,7 @@ public class RolledItemsManager
                     }
                 }
                 if (!key.reset()) break;
+                if (!watcherRunning || watchService != service) break;
                 if (!relevant) continue;
 
                 long now = System.currentTimeMillis();
@@ -457,7 +453,7 @@ public class RolledItemsManager
 
                 try
                 {
-                    reconcileWithCloud(true);
+                    reconcileWithCloud();
                     safeNotifyChange();
                 }
                 catch (Throwable t)
@@ -468,8 +464,14 @@ public class RolledItemsManager
         }
         finally
         {
-            closeWatchServiceQuietly();
-            watcherRunning = false;
+            synchronized (this)
+            {
+                if (watchService == service)
+                {
+                    closeWatchServiceQuietly();
+                    watcherRunning = false;
+                }
+            }
         }
     }
 

@@ -60,7 +60,7 @@ final class WikiDropBucketParser {
                     row.get("drop_json"),
                     row.get("rare_drop_table"),
                     stringValue(row.get("page_name")),
-                    stringValue(row.get("page_name_sub")),
+                    row.get("page_name_sub"),
                     drops
             );
         }
@@ -71,7 +71,7 @@ final class WikiDropBucketParser {
             JsonElement dropJson,
             JsonElement rareDropTable,
             String pageName,
-            String pageSub,
+            JsonElement pageSub,
             List<BucketDrop> output) {
         if (dropJson == null || dropJson.isJsonNull()) {
             return;
@@ -84,14 +84,14 @@ final class WikiDropBucketParser {
                         drops.get(i),
                         booleanValue(elementAt(rareDropTable, i)),
                         pageName,
-                        pageSub,
+                        stringValue(elementAt(pageSub, i)),
                         output
                 );
             }
             return;
         }
 
-        addEmbeddedDrops(dropJson, booleanValue(rareDropTable), pageName, pageSub, output);
+        addEmbeddedDrops(dropJson, booleanValue(rareDropTable), pageName, stringValue(pageSub), output);
     }
 
     private static void addEmbeddedDrops(
@@ -126,9 +126,9 @@ final class WikiDropBucketParser {
             return;
         }
 
-        String sourceVersion = extractSourceVersion(stringValue(data.get("Dropped from")));
+        String sourceVersion = extractPageSub(pageName, pageSub);
         if (sourceVersion.isEmpty()) {
-            sourceVersion = extractPageSub(pageName, pageSub);
+            sourceVersion = extractSourceVersion(stringValue(data.get("Dropped from")));
         }
 
         output.add(new BucketDrop(
@@ -206,7 +206,7 @@ final class WikiDropBucketParser {
             List<BucketDrop> allDrops,
             List<String> targetDropVersions,
             int combatLevel,
-            WikiDropTableClassifier.Classification classification) {
+            WikiDropTableClassifier.Classification classification, boolean freeToPlay) {
         if (allDrops == null || allDrops.isEmpty()) {
             return Collections.emptyList();
         }
@@ -214,12 +214,17 @@ final class WikiDropBucketParser {
         WikiDropTableClassifier.Classification tables = classification == null
                 ? WikiDropTableClassifier.Classification.empty()
                 : classification;
+        List<String> selectedDropVersions = selectMembershipDropVersions(
+                targetDropVersions,
+                allDrops,
+                freeToPlay
+        );
         Map<String, DropItem> normal = new LinkedHashMap<>();
         Map<String, DropItem> rare = new LinkedHashMap<>();
         Map<String, DropItem> gem = new LinkedHashMap<>();
         Map<String, DropItem> combined = new LinkedHashMap<>();
 
-        for (BucketDrop drop : selectRows(allDrops, targetDropVersions, combatLevel)) {
+        for (BucketDrop drop : selectRows(allDrops, selectedDropVersions, combatLevel, freeToPlay)) {
             DropItem item = new DropItem(0, drop.getItemName(), drop.getRarity());
             if (!drop.isRareDropTable()) {
                 mergeMostCommon(normal, item);
@@ -228,7 +233,7 @@ final class WikiDropBucketParser {
 
             routeSpecialTableDrop(
                     item,
-                    tables.resolve(drop.getSourceVersion(), targetDropVersions),
+                    tables.resolve(drop.getSourceVersion(), selectedDropVersions),
                     rare,
                     gem,
                     combined
@@ -279,12 +284,22 @@ final class WikiDropBucketParser {
     private static List<BucketDrop> selectRows(
             List<BucketDrop> allDrops,
             List<String> targetDropVersions,
-            int combatLevel) {
+            int combatLevel,
+            boolean freeToPlay) {
         Set<String> targets = normalizeVersions(targetDropVersions);
+        Set<String> availableVersions = sourceVersions(allDrops);
+        boolean membershipSplit = hasMembershipSplit(availableVersions);
+        String selectedMembership = freeToPlay ? "free-to-play" : "members";
         List<BucketDrop> matches = new ArrayList<>();
 
         for (BucketDrop drop : allDrops) {
             Set<String> versions = normalizeVersions(WikiMonsterMetadataParser.splitValues(drop.getSourceVersion(), "[,¦]"));
+            if (membershipSplit
+                    && (versions.contains("free-to-play") || versions.contains("members"))
+                    && !versions.contains(selectedMembership)) {
+                continue;
+            }
+
             if (!targets.isEmpty()
                     && !versions.isEmpty()
                     && Collections.disjoint(versions, targets)) {
@@ -329,11 +344,60 @@ final class WikiDropBucketParser {
         return normalized;
     }
 
+    private static List<String> selectMembershipDropVersions(
+            List<String> versions,
+            List<BucketDrop> allDrops,
+            boolean freeToPlay) {
+        Set<String> normalizedTargets = normalizeVersions(versions);
+        boolean membershipSplit = hasMembershipSplit(normalizedTargets)
+                || hasMembershipSplit(sourceVersions(allDrops));
+        if (!membershipSplit) {
+            return versions;
+        }
+
+        List<String> selected = new ArrayList<>();
+        if (versions != null) {
+            for (String version : versions) {
+                String normalizedVersion = normalizeDropVersion(version);
+                if (!"free-to-play".equals(normalizedVersion) && !"members".equals(normalizedVersion)) {
+                    selected.add(version);
+                }
+            }
+        }
+        selected.add(freeToPlay ? "Free-to-play" : "Members");
+        return selected;
+    }
+
+    private static Set<String> sourceVersions(List<BucketDrop> drops) {
+        Set<String> versions = new LinkedHashSet<>();
+        if (drops != null) {
+            for (BucketDrop drop : drops) {
+                versions.addAll(normalizeVersions(
+                        WikiMonsterMetadataParser.splitValues(drop.getSourceVersion(), "[,¦]")
+                ));
+            }
+        }
+        return versions;
+    }
+
+    private static boolean hasMembershipSplit(Set<String> versions) {
+        return versions.contains("free-to-play") && versions.contains("members");
+    }
+
     private static String normalizeDropVersion(String value) {
         String normalized = WikiMonsterMetadataParser.normalizeForComparison(value);
 
         if (normalized.startsWith("drops (") && normalized.endsWith(")")) {
             normalized = normalized.substring(7, normalized.length() - 1).trim();
+        }
+
+        if (normalized.contains("free-to-play")
+                || normalized.contains("free to play")
+                || "f2p".equals(normalized)) {
+            return "free-to-play";
+        }
+        if (normalized.contains("member")) {
+            return "members";
         }
 
         return normalized;

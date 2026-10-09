@@ -48,7 +48,7 @@ public class ObtainedItemsManager
     private volatile boolean configWriteWarned = false;
     private volatile boolean dirty = false;
 
-    private WatchService watchService;
+    private volatile WatchService watchService;
     private volatile boolean watcherRunning = false;
     private volatile long lastSelfWriteMs = 0L;
     private Thread watcherThread;
@@ -58,10 +58,7 @@ public class ObtainedItemsManager
     /** Return an immutable snapshot to avoid leaking the synchronizedSet. */
     public Set<Integer> getObtainedItems()
     {
-        synchronized (obtainedItems)
-        {
-            return Collections.unmodifiableSet(new LinkedHashSet<>(obtainedItems));
-        }
+        return Collections.unmodifiableSet(snapshotObtained());
     }
 
     public void markObtained(int itemId)
@@ -76,7 +73,7 @@ public class ObtainedItemsManager
 
     public void loadObtainedItems()
     {
-        reconcileWithCloud(false);
+        reconcileWithCloud();
         safeNotifyChange();
     }
 
@@ -87,7 +84,7 @@ public class ObtainedItemsManager
     }
 
     /** Live-reload: start watching the JSON for CREATE/MODIFY/DELETE. */
-    public void startWatching()
+    public synchronized void startWatching()
     {
         if (watcherRunning) return;
         Path file = safeGetFilePathOrNull(FILE_NAME);
@@ -112,12 +109,13 @@ public class ObtainedItemsManager
 
         watcherRunning = true;
         final String target = file.getFileName().toString();
-        watcherThread = new Thread(() -> runWatcherLoop(target), "ChanceMan-Obtained-Watcher");
+        final WatchService service = watchService;
+        watcherThread = new Thread(() -> runWatcherLoop(target, service), "ChanceMan-Obtained-Watcher");
         watcherThread.setDaemon(true);
         watcherThread.start();
     }
 
-    public void stopWatching()
+    public synchronized void stopWatching()
     {
         watcherRunning = false;
         closeWatchServiceQuietly();
@@ -149,7 +147,7 @@ public class ObtainedItemsManager
         }
     }
 
-    private void reconcileWithCloud(boolean runtime)
+    private void reconcileWithCloud()
     {
         String player = accountManager.getPlayerName();
         if (player == null) return;
@@ -157,12 +155,10 @@ public class ObtainedItemsManager
         Path newFile = safeGetFilePathOrNull(FILE_NAME);
         if (newFile == null) return;
 
-        boolean newFileExisted = Files.exists(newFile);
-
         migrateLegacyLocalObtainedIfNeeded();
 
         // Re-check existence after migration attempt.
-        newFileExisted = Files.exists(newFile);
+        boolean newFileExisted = Files.exists(newFile);
 
         // Read local new first; if missing, seed from legacy rolled file (if it still exists)
         Path legacyFile = safeGetFilePathOrNull(LEGACY_FILE_NAME);
@@ -346,13 +342,10 @@ public class ObtainedItemsManager
 
     private boolean isExecutorAvailable()
     {
-        if (executor == null) return false;
-        if (executor instanceof java.util.concurrent.ThreadPoolExecutor)
-        {
-            java.util.concurrent.ThreadPoolExecutor tpe = (java.util.concurrent.ThreadPoolExecutor) executor;
-            return !tpe.isShutdown() && !tpe.isTerminated();
-        }
-        return true;
+        ExecutorService currentExecutor = executor;
+        return currentExecutor != null
+                && !currentExecutor.isShutdown()
+                && !currentExecutor.isTerminated();
     }
 
     private void safeNotifyChange()
@@ -496,15 +489,15 @@ public class ObtainedItemsManager
         watchService = null;
     }
 
-    private void runWatcherLoop(String target)
+    private void runWatcherLoop(String target, WatchService service)
     {
         long lastHandled = 0L;
         try
         {
-            while (watcherRunning)
+            while (watcherRunning && watchService == service)
             {
                 WatchKey key;
-                try { key = watchService.take(); }
+                try { key = service.take(); }
                 catch (InterruptedException | ClosedWatchServiceException ie) { break; }
 
                 boolean relevant = false;
@@ -517,6 +510,7 @@ public class ObtainedItemsManager
                     }
                 }
                 if (!key.reset()) break;
+                if (!watcherRunning || watchService != service) break;
                 if (!relevant) continue;
 
                 long now = System.currentTimeMillis();
@@ -526,7 +520,7 @@ public class ObtainedItemsManager
 
                 try
                 {
-                    reconcileWithCloud(true);
+                    reconcileWithCloud();
                     safeNotifyChange();
                 }
                 catch (Throwable t)
@@ -537,8 +531,14 @@ public class ObtainedItemsManager
         }
         finally
         {
-            closeWatchServiceQuietly();
-            watcherRunning = false;
+            synchronized (this)
+            {
+                if (watchService == service)
+                {
+                    closeWatchServiceQuietly();
+                    watcherRunning = false;
+                }
+            }
         }
     }
 

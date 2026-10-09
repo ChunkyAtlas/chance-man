@@ -177,7 +177,7 @@ public class DropCache {
             try {
                 writeCacheFile(exactFile, data);
                 if (player.equals(loadedPlayer) && indexLoaded) {
-                    indexData(exactFile, data);
+                    cache.put(exactFile, data);
                 }
             } catch (Exception ex) {
                 log.error("Failed to write exact drop cache for NPC {}", npcId, ex);
@@ -280,7 +280,7 @@ public class DropCache {
                     boolean staleTemp = filename.endsWith(".tmp") && modified.isBefore(tempCutoff);
                     if (legacyJson || staleJson || staleTemp) {
                         Files.deleteIfExists(path);
-                        removeIndex(path);
+                        cache.remove(path);
                     }
                 } catch (IOException ex) {
                     log.warn("Failed to prune drop cache {}", path, ex);
@@ -343,7 +343,7 @@ public class DropCache {
     private NpcDropData readFreshCache(Path file, String expectedPlayer, int expectedNpcId, int expectedLevel) {
         if (file == null || !Files.isRegularFile(file)) {
             if (file != null) {
-                removeIndex(file);
+                cache.remove(file);
             }
             return null;
         }
@@ -366,7 +366,7 @@ public class DropCache {
             }
 
             if (expectedPlayer.equals(loadedPlayer) && indexLoaded) {
-                indexData(file, data);
+                cache.put(file, data);
             }
             return data;
         } catch (Exception ex) {
@@ -471,7 +471,7 @@ public class DropCache {
                     try {
                         NpcDropData data = readCacheFile(path);
                         if (isValidExactCache(data, expectedNpcId, 0)) {
-                            indexData(path, data);
+                            cache.put(path, data);
                         } else {
                             deleteCacheFile(path);
                         }
@@ -487,21 +487,13 @@ public class DropCache {
         }
     }
 
-    private void indexData(Path path, NpcDropData data) {
-        cache.put(path, data);
-    }
-
-    private void removeIndex(Path path) {
-        cache.remove(path);
-    }
-
     private void deleteCacheFile(Path path) {
         try {
             Files.deleteIfExists(path);
         } catch (IOException ex) {
             log.warn("Failed to delete drop cache {}", path, ex);
         }
-        removeIndex(path);
+        cache.remove(path);
     }
 
     private Path getCacheDir(String player) {

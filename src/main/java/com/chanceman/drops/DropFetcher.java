@@ -1,5 +1,6 @@
 package com.chanceman.drops;
 
+import com.chanceman.ChanceManConfig;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -50,6 +51,7 @@ public class DropFetcher {
     private static final String WIKI_API = "https://oldschool.runescape.wiki/api.php";
     private static final int ITEM_SCAN_LIMIT = 40_000;
 
+    private final ChanceManConfig config;
     private final OkHttpClient httpClient;
     private final ItemManager itemManager;
     private final ClientThread clientThread;
@@ -325,7 +327,8 @@ public class DropFetcher {
                 rows,
                 dropVersions,
                 resolvedLevel,
-                metadata.getDropTableClassification()
+                metadata.getDropTableClassification(),
+                config.freeToPlay()
         );
         return sections.isEmpty()
                 ? null

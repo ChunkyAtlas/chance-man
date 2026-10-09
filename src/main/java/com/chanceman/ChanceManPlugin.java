@@ -292,11 +292,6 @@ public class ChanceManPlugin extends Plugin
                     {
                         continue;
                     }
-                    if (!ItemsFilter.isPoisonEligible(i, config.requireWeaponPoison(),
-                            rolledItemsManager.getRolledItems()))
-                    {
-                        continue;
-                    }
                     allTradeableItems.add(i);
                 }
             }
@@ -323,6 +318,10 @@ public class ChanceManPlugin extends Plugin
         switch (event.getKey())
         {
             case "freeToPlay":
+                dropCache.clearAllCaches();
+                refreshTradeableItems();
+                break;
+
             case "includeF2PTradeOnlyItems":
             case "enableFlatpacks":
             case "enableItemSets":

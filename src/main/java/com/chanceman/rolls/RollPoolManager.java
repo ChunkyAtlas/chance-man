@@ -2,6 +2,7 @@ package com.chanceman.rolls;
 
 import com.chanceman.ChanceManConfig;
 import com.chanceman.account.AccountManager;
+import com.chanceman.filters.ItemsFilter;
 import net.runelite.client.config.ConfigManager;
 
 import javax.inject.Inject;
@@ -48,10 +49,13 @@ public final class RollPoolManager
             return Collections.emptyList();
         }
 
+        Set<Integer> unlockedItems = rolledItems == null ? Collections.emptySet() : rolledItems;
+        boolean requireWeaponPoison = config.requireWeaponPoison();
         List<Integer> available = new ArrayList<>(allTradeableItems.size());
         for (int itemId : allTradeableItems)
         {
-            if (rolledItems == null || !rolledItems.contains(itemId))
+            if (!unlockedItems.contains(itemId)
+                    && ItemsFilter.isPoisonEligible(itemId, requireWeaponPoison, unlockedItems))
             {
                 available.add(itemId);
             }

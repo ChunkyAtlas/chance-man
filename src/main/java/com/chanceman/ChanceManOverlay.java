@@ -93,15 +93,12 @@ public class ChanceManOverlay extends Overlay {
 
     // Motion state
     private float rollOffset = 0f; // cumulative horizontal scroll in px
-    private float currentSpeed = INITIAL_SPEED; // px/s
     private Supplier<Integer> randomLockedItemSupplier;
     private volatile long lastUpdateNanos = 0L;
 
     // Snap state
     private boolean isSnapping = false;
     private long snapStartNs = 0L;
-    private float snapBase;
-    private float snapResidualStart;
     private float snapTarget;
     private int winnerDelta = 0;
 
@@ -142,15 +139,12 @@ public class ChanceManOverlay extends Overlay {
         this.rollDurationMs = rollDurationMs;
         this.rollStartNs = System.nanoTime();
         this.rollOffset = 0f;
-        this.currentSpeed = INITIAL_SPEED;
         this.randomLockedItemSupplier = randomLockedItemSupplier;
         this.isAnimating = true;
         this.lastUpdateNanos = System.nanoTime();
 
         this.isSnapping = false;
         this.snapStartNs = 0L;
-        this.snapBase = 0f;
-        this.snapResidualStart = 0f;
         this.snapTarget = 0f;
         this.winnerDelta = 0;
 
@@ -205,7 +199,6 @@ public class ChanceManOverlay extends Overlay {
         }
 
         // Compute clamped dt and ease the speed (quintic-ish falloff via (1 - t)^3)
-        final long nowNanos = System.nanoTime();
         float dt = 0f;
         if (lastUpdateNanos != 0L) {
             dt = (nowNs - lastUpdateNanos) / 1_000_000_000f;
@@ -215,7 +208,7 @@ public class ChanceManOverlay extends Overlay {
 
         final float t = (rollDurationMs > 0) ? Math.min(1f, elapsedMs / (float) rollDurationMs) : 1f;
         final float eased = (float) Math.pow(1f - t, 3);
-        currentSpeed = MIN_SPEED + (INITIAL_SPEED - MIN_SPEED) * eased;
+        final float currentSpeed = MIN_SPEED + (INITIAL_SPEED - MIN_SPEED) * eased; // px/s
 
         final RollOverlayScale configuredScale = config.rollOverlayScale();
         final float overlayScale = configuredScale == null ? 1f : configuredScale.getScale();
@@ -286,9 +279,7 @@ public class ChanceManOverlay extends Overlay {
                         if (rollOffset >= STEP) {
                             normalizeOnce();
                             winnerDelta = 0;
-                            snapBase = 0f;
                             snapTarget = 0f;
-                            snapResidualStart = 0f;
                         }
                     } else {
                         rollOffset += currentSpeed * dt;
@@ -411,8 +402,8 @@ public class ChanceManOverlay extends Overlay {
         snapStartNs = nowNs;
 
         final float k = (float) Math.floor(rollOffset / STEP);
-        snapBase = k * STEP;
-        snapResidualStart = rollOffset - snapBase; // [0, STEP)
+        final float snapBase = k * STEP;
+        final float snapResidualStart = rollOffset - snapBase;
         final boolean goNext = (snapResidualStart / STEP) >= SNAP_NEXT_THRESHOLD;
         winnerDelta = goNext ? 1 : 0;
         snapTarget = goNext ? (snapBase + STEP) : snapBase;

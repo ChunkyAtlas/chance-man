@@ -3,7 +3,6 @@ package com.chanceman.menus;
 import lombok.Getter;
 import net.runelite.api.gameval.ItemID;
 
-import java.util.HashSet;
 import java.util.HashMap;
 
 @Getter
@@ -76,11 +75,19 @@ public enum SkillItem
 	ADAMANTITE_BAR(ItemID.ADAMANTITE_BAR, SkillOp.SMITH),
 	RUNITE_BAR(ItemID.RUNITE_BAR, SkillOp.SMITH),
 
+	BRONZE_CANNONBALL(ItemID.BRONZE_CANNONBALL, SkillOp.SMITH),
+	IRON_CANNONBALL(ItemID.IRON_CANNONBALL, SkillOp.SMITH),
+	STEEL_CANNONBALL(ItemID.MCANNONBALL, SkillOp.SMITH),
+	MITHRIL_CANNONBALL(ItemID.MITHRIL_CANNONBALL, SkillOp.SMITH),
+	ADAMANT_CANNONBALL(ItemID.ADAMANT_CANNONBALL, SkillOp.SMITH),
+	RUNE_CANNONBALL(ItemID.RUNE_CANNONBALL, SkillOp.SMITH),
+
 	TIN_ORE(ItemID.TIN_ORE, SkillOp.SMELT),
 	COPPER_ORE(ItemID.COPPER_ORE, SkillOp.SMELT),
 	IRON_ORE(ItemID.IRON_ORE, SkillOp.SMELT),
 	COAL(ItemID.COAL, SkillOp.SMELT),
 	MITHRIL_ORE(ItemID.MITHRIL_ORE, SkillOp.SMELT),
+	ADAMANTITE_ORE(ItemID.ADAMANTITE_ORE, SkillOp.SMELT),
 	RUNITE_ORE(ItemID.RUNITE_ORE, SkillOp.SMELT),
 	SILVER_ORE(ItemID.SILVER_ORE, SkillOp.SMELT),
 	SILVER_BAR(ItemID.SILVER_BAR,SkillOp.SMELT),
@@ -126,6 +133,8 @@ public enum SkillItem
 	// Untradeables that conflict
 	OAK_BLACKJACK(ItemID.BLACKJACK_OAK, SkillOp.LURE, false),
 	RED_VINE_WORMS(ItemID.RED_VINE_WORM, SkillOp.BAIT, false),
+	BLURITE_ORE(ItemID.BLURITE_ORE, SkillOp.SMELT, false),
+	BLURITE_BAR(ItemID.BLURITE_BAR, SkillOp.SMITH, false),
 	ELEMENTAL_METAL(ItemID.ELEMENTAL_WORKSHOP_BAR, SkillOp.SMITH, false),
 	PRIMED_MIND_BAR(ItemID.ELEM_MIND_BAR, SkillOp.SMITH, false),
 	BOBS_NET(ItemID.EVIL_BOB_NET, SkillOp.SMALL_NET, false);
@@ -151,21 +160,19 @@ public enum SkillItem
 		return option;
 	}
 
-	private static final HashSet<Integer> ALL_SKILL_ITEMS = new HashSet<>();
 	private static final HashMap<Integer, SkillItem> ID_TO_ITEM = new HashMap<>();
 
 	static
 	{
 		for (SkillItem skillItem : SkillItem.values())
 		{
-			ALL_SKILL_ITEMS.add(skillItem.getId());
 			ID_TO_ITEM.put(skillItem.getId(), skillItem);
 		}
 	}
 
 	public static boolean isSkillItem(int id)
 	{
-		return ALL_SKILL_ITEMS.contains(id);
+		return ID_TO_ITEM.containsKey(id);
 	}
 
 	public static SkillItem fromId(int id)

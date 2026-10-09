@@ -31,6 +31,7 @@ public final class WidgetUtils
                 .setOption("Show Drops")
                 .setTarget(attackEntry.getTarget())
                 .setIdentifier(attackEntry.getIdentifier())
+                .setWorldViewId(attackEntry.getWorldViewId())
                 .setParam0(attackEntry.getParam0())
                 .setParam1(attackEntry.getParam1())
                 .setType(MenuAction.RUNELITE);
