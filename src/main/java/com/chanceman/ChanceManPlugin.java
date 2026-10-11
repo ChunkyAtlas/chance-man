@@ -7,6 +7,7 @@ import com.chanceman.drops.DropCache;
 import com.chanceman.filters.EnsouledHeadMapping;
 import com.chanceman.menus.ActionHandler;
 import com.chanceman.filters.ItemsFilter;
+import com.chanceman.filters.PoisonWeapons;
 import com.chanceman.menus.TutorialIslandGuard;
 import com.chanceman.rolls.RollPoolManager;
 import com.chanceman.ui.DropsTabUI;
@@ -285,7 +286,7 @@ public class ChanceManPlugin extends Plugin
             for (int i = 0; i < 40000; i++)
             {
                 ItemComposition comp = itemManager.getItemComposition(i);
-                if (comp != null && comp.isGeTradeable()
+                if (comp != null && (comp.isGeTradeable() || PoisonWeapons.isPoisonableWeapon(i))
                         && !ItemsFilter.isBlocked(i, config))
                 {
                     if (config.freeToPlay() && comp.isMembers())
