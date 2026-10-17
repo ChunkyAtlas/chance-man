@@ -3,6 +3,7 @@ package com.chanceman.menus;
 import com.chanceman.ChanceManConfig;
 import com.chanceman.ChanceManPlugin;
 import com.chanceman.filters.EnsouledHeadMapping;
+import com.chanceman.managers.ObtainedItemsManager;
 import com.chanceman.managers.RolledItemsManager;
 import net.runelite.api.Client;
 import net.runelite.api.GameState;
@@ -12,6 +13,8 @@ import net.runelite.api.MenuAction;
 import net.runelite.api.MenuEntry;
 import net.runelite.api.NPC;
 import net.runelite.api.NPCComposition;
+import net.runelite.api.Tile;
+import net.runelite.api.TileItem;
 import net.runelite.api.WorldView;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.MenuEntryAdded;
@@ -22,7 +25,6 @@ import net.runelite.api.gameval.ItemID;
 import net.runelite.api.gameval.ObjectID;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
-import net.runelite.client.game.ItemManager;
 import net.runelite.client.game.FishingSpot;
 import net.runelite.client.util.Text;
 import net.runelite.api.widgets.Widget;
@@ -30,6 +32,7 @@ import net.runelite.api.widgets.Widget;
 import javax.inject.Inject;
 import javax.inject.Singleton;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -76,28 +79,30 @@ public class ActionHandler {
     private Restrictions restrictions;
     @Inject
     private RolledItemsManager rolledItemsManager;
+    @Inject
+    private ObtainedItemsManager obtainedItemsManager;
 
     /**
-     * A static helper to further safeguard ground item actions.
+     * A helper to further safeguard ground item actions.
      * If a ground item is locked, this method consumes the event.
      */
-    public static void handleGroundItems(
-            ItemManager itemManager,
-            RolledItemsManager rolledItemsManager,
-            MenuOptionClicked event,
-            ChanceManPlugin plugin) {
-        if (event.getMenuAction() != null && GROUND_ACTIONS.contains(event.getMenuAction())) {
+    private void handleGroundItems(MenuOptionClicked event) {
+        if (isGroundItemAction(event.getMenuAction())) {
             int rawItemId = event.getId() != -1
                     ? event.getId()
                     : event.getMenuEntry().getItemId();
             int mapped = EnsouledHeadMapping.toTradeableId(rawItemId);
-            int canonicalGroundId = itemManager.canonicalize(mapped);
+            int canonicalGroundId = plugin.getItemManager().canonicalize(mapped);
 
-            if (plugin.isInPlay(canonicalGroundId)
-                    && rolledItemsManager != null
-                    && !rolledItemsManager.isRolled(canonicalGroundId))
+            if (isLockedGroundItem(canonicalGroundId, event.getMenuEntry()))
                 event.consume();
         }
+    }
+
+    private boolean isGroundItemAction(MenuAction action) {
+        return GROUND_ACTIONS.contains(action)
+                || (config.groundItemOwnershipFilter()
+                && action == MenuAction.WIDGET_TARGET_ON_GROUND_ITEM);
     }
 
     private EnabledUI getEnabledUI(MenuEntry entry) {
@@ -114,12 +119,13 @@ public class ActionHandler {
      */
     private int getItemId(MenuEntryAdded event, MenuEntry entry) {
         MenuAction type = entry.getType();
+        boolean groundItem = isGroundItemAction(type);
         boolean hasItemId = entry.getItemId() > 0 || event.getItemId() > 0;
-        if (!GROUND_ACTIONS.contains(type) && !hasItemId) {
+        if (!groundItem && !hasItemId) {
             return -1;
         }
 
-        int raw = GROUND_ACTIONS.contains(type)
+        int raw = groundItem
                 ? event.getIdentifier()
                 : Math.max(event.getItemId(), entry.getItemId());
         int mapped = EnsouledHeadMapping.toTradeableId(raw);
@@ -151,9 +157,8 @@ public class ActionHandler {
 
         MenuAction action = entry.getType();
         int id = getItemId(event, entry);
-        boolean enabled = GROUND_ACTIONS.contains(action)
-                ? !isLockedGroundItem(id)
-                : isEnabled(id, entry, action, ui);
+        boolean enabled = (GROUND_ACTIONS.contains(action) || isEnabled(id, entry, action, ui))
+                && (!isGroundItemAction(action) || !isLockedGroundItem(id, entry));
 
         // If not enabled, grey out the text and set the click handler to DISABLED.
         if (!enabled) {
@@ -169,6 +174,8 @@ public class ActionHandler {
 
     @Subscribe
     public void onMenuOptionClicked(MenuOptionClicked event) {
+        if (inactive()) return;
+
         // If the entry is disabled, consume the event.
         if (event.getMenuEntry().onClick() == DISABLED) {
             event.consume();
@@ -176,16 +183,44 @@ public class ActionHandler {
         }
 
         // Extra safeguard for ground items.
-        handleGroundItems(plugin.getItemManager(), rolledItemsManager, event, plugin);
+        handleGroundItems(event);
     }
 
     /**
      * @param itemId canonicalized item ID of a ground item
-     * @return true if it is in play and still locked
+     * @return true if the item is locked or its ownership prevents taking it
      */
-    private boolean isLockedGroundItem(int itemId) {
-        return plugin.isInPlay(itemId)
-                && !rolledItemsManager.isRolled(itemId);
+    private boolean isLockedGroundItem(int itemId, MenuEntry entry) {
+        if (!plugin.isInPlay(itemId)) return false;
+        if (!rolledItemsManager.isRolled(itemId)) return true;
+        if (!config.groundItemOwnershipFilter() || obtainedItemsManager.isObtained(itemId))
+            return false;
+
+        WorldView worldView = client.getWorldView(entry.getWorldViewId());
+        if (worldView == null) return true;
+
+        Tile[][][] tiles = worldView.getScene().getTiles();
+        int plane = worldView.getPlane();
+        int x = entry.getParam0();
+        int y = entry.getParam1();
+        if (x < 0 || y < 0 || x >= tiles[plane].length || y >= tiles[plane][x].length)
+            return true;
+
+        Tile tile = tiles[plane][x][y];
+        List<TileItem> items = tile == null ? null : tile.getGroundItems();
+        boolean found = false;
+        if (items != null) {
+            for (TileItem item : items) {
+                if (item.getId() == entry.getIdentifier()) {
+                    int ownership = item.getOwnership();
+                    if (ownership != TileItem.OWNERSHIP_SELF && ownership != TileItem.OWNERSHIP_NONE)
+                        return true;
+                    found = true;
+                }
+            }
+        }
+
+        return !found;
     }
 
     private boolean isHealthOrbCure(MenuEntry entry) {

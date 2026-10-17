@@ -118,6 +118,9 @@ Open RuneLite’s plugin settings and select **Chance Man** to configure options
 - **Weapon Poison Unlock Requirements**
 - **Enable Roll Sounds**
 - **Grand Exchange roll requirements**
+- **Ground Item Ownership Filter**
+    - Items dropped by other players require both obtained and rolled status before pickup or Telekinetic Grab.
+    - Your own drops and world spawns follow the normal roll requirements.
 - **Rolled item chat color**
 - **Unlocked item chat color**
 - **Sort drops by rarity**

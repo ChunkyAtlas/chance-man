@@ -269,6 +269,18 @@ public interface ChanceManConfig extends Config
         return 150;
     }
 
+    @ConfigItem(
+            keyName = "groundItemOwnershipFilter",
+            name = "Ground Item Ownership Filter",
+            description = "Require items from other players to be both obtained and rolled before taking them.",
+            position = 4,
+            section = lockedItemBehaviorSection
+    )
+    default boolean groundItemOwnershipFilter()
+    {
+        return true;
+    }
+
     @ConfigSection(
             name = "Tool Roll Guarantee",
             description = "Guarantee a tool after too many rolls without one.",
