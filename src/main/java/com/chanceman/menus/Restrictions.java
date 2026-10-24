@@ -230,6 +230,11 @@ public class Restrictions
 				|| enabledSkillOps.contains(SkillOp.BIG_NET);
 	}
 
+	public boolean isNetTrapEnabled()
+	{
+		return isInventoryItemEnabled(ItemID.NET_TRAP);
+	}
+
 	private boolean shouldSkipItem(int id)
 	{
 		if (!plugin.isInPlay(id))

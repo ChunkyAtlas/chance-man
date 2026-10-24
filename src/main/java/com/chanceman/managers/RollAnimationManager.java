@@ -34,6 +34,7 @@ import java.util.concurrent.TimeUnit;
 public class RollAnimationManager
 {
     private static final int SNAP_WINDOW_MS = 350;
+    private static final int MANUAL_ROLL = -1;
     @Inject private ItemManager itemManager;
     @Inject private Client client;
     @Inject private ClientThread clientThread;
@@ -59,10 +60,6 @@ public class RollAnimationManager
 
     private volatile List<Integer> activeRollPool = Collections.emptyList();
 
-    @Getter
-    @Setter
-    private volatile boolean manualRoll = false;
-
     /** Called by plugin after building tradeables. */
     public void setAllTradeableItems(Set<Integer> allTradeableItems)
     {
@@ -87,10 +84,20 @@ public class RollAnimationManager
         rollQueue.offer(obtainedItemId);
     }
 
+    public synchronized void enqueueManualRoll()
+    {
+        if (!hasTradeablesReady() || isRolling || rollQueue.contains(MANUAL_ROLL))
+        {
+            return;
+        }
+
+        rollQueue.offer(MANUAL_ROLL);
+    }
+
     /**
      * Process pending rolls if idle.
      */
-    public void process()
+    public synchronized void process()
     {
         if (!hasTradeablesReady() || isRolling)
         {
@@ -122,7 +129,7 @@ public class RollAnimationManager
 
         boolean toolGuaranteeEnabled = config.enableToolRollGuarantee();
         boolean questItemRollsEnabled = config.enableQuestItemRolls();
-        boolean wasManual = manualRoll;
+        boolean wasManual = obtainedItemId == MANUAL_ROLL;
 
         activeRollPool = rollPoolManager.selectPool(
                 allTradeableItems,
@@ -167,7 +174,6 @@ public class RollAnimationManager
         int rolledItemId = overlay.getFinalItem();
         if (rolledItemId <= 0 || rolledManager.isRolled(rolledItemId))
         {
-            finishRoll();
             return;
         }
 
@@ -220,7 +226,6 @@ public class RollAnimationManager
     private void finishRoll()
     {
         activeRollPool = Collections.emptyList();
-        manualRoll = false;
         isRolling = false;
     }
 
@@ -256,7 +261,6 @@ public class RollAnimationManager
     {
         rollQueue.clear();
         activeRollPool = Collections.emptyList();
-        manualRoll = false;
         isRolling = false;
         executor.shutdownNow();
     }

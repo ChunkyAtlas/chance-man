@@ -572,30 +572,7 @@ public class ChanceManPanel extends PluginPanel
 
     private void performManualRoll(java.awt.event.ActionEvent e)
     {
-        if (rollAnimationManager.isRolling()) return;
-        if (!rollAnimationManager.hasTradeablesReady()) return;
-
-        final List<Integer> tradeableSnapshot;
-        synchronized (allTradeableItems)
-        {
-            tradeableSnapshot = new ArrayList<>(allTradeableItems);
-        }
-
-        List<Integer> locked = new ArrayList<>();
-        for (int id : tradeableSnapshot)
-        {
-            if (!rolledItemsManager.isRolled(id))
-            {
-                locked.add(id);
-            }
-        }
-
-        if (locked.isEmpty()) return;
-
-        rollAnimationManager.setManualRoll(true);
-        rollAnimationManager.enqueueRoll(
-                locked.get(new Random().nextInt(locked.size()))
-        );
+        rollAnimationManager.enqueueManualRoll();
     }
 
     @Override

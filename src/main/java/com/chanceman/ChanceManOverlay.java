@@ -294,6 +294,7 @@ public class ChanceManOverlay extends Overlay {
                         if (rollOffset >= STEP) {
                             normalizeOnce();
                             winnerDelta = 0;
+                            snapTarget = 0f;
                         }
                     }
                 }

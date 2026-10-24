@@ -177,7 +177,8 @@ public class ActionHandler {
         if (inactive()) return;
 
         // If the entry is disabled, consume the event.
-        if (event.getMenuEntry().onClick() == DISABLED) {
+        if (event.getMenuEntry().onClick() == DISABLED
+                || !isNetTrapActionEnabled(event.getMenuEntry())) {
             event.consume();
             return;
         }
@@ -278,6 +279,7 @@ public class ActionHandler {
      * It returns true if the action should be allowed.
      */
     private boolean isEnabled(int id, MenuEntry entry, MenuAction action, EnabledUI ui) {
+        if (!isNetTrapActionEnabled(entry)) return false;
         if (isHealthOrbCure(entry)) return true;
 
         String option = Text.removeTags(entry.getOption());
@@ -362,6 +364,21 @@ public class ActionHandler {
             return true;
 
         return rolledItemsManager.isRolled(id);
+    }
+
+    private boolean isNetTrapActionEnabled(MenuEntry entry) {
+        if (!GAME_OBJECT_ACTIONS.contains(entry.getType())) return true;
+
+        String option = Text.removeTags(entry.getOption());
+        String target = Text.removeTags(entry.getTarget());
+
+        if (option.equalsIgnoreCase("Set-trap") && target.equalsIgnoreCase("Young tree"))
+            return restrictions.isNetTrapEnabled();
+
+        if (option.equalsIgnoreCase("Reset") && target.equalsIgnoreCase("Net trap"))
+            return rolledItemsManager.isRolled(ItemID.NET_TRAP);
+
+        return true;
     }
 
     private boolean isNetFishingEnabled(MenuEntry entry) {
