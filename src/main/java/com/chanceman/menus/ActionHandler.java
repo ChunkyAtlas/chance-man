@@ -193,8 +193,11 @@ public class ActionHandler {
      */
     private boolean isLockedGroundItem(int itemId, MenuEntry entry) {
         if (!plugin.isInPlay(itemId)) return false;
-        if (!rolledItemsManager.isRolled(itemId)) return true;
-        if (!config.groundItemOwnershipFilter() || obtainedItemsManager.isObtained(itemId))
+        boolean rolled = rolledItemsManager.isRolled(itemId);
+        if (!config.groundItemOwnershipFilter()) return !rolled;
+        if (!rolled && entry.getType() != MenuAction.WIDGET_TARGET_ON_GROUND_ITEM)
+            return true;
+        if (rolled && obtainedItemsManager.isObtained(itemId))
             return false;
 
         WorldView worldView = client.getWorldView(entry.getWorldViewId());
@@ -214,7 +217,8 @@ public class ActionHandler {
             for (TileItem item : items) {
                 if (item.getId() == entry.getIdentifier()) {
                     int ownership = item.getOwnership();
-                    if (ownership != TileItem.OWNERSHIP_SELF && ownership != TileItem.OWNERSHIP_NONE)
+                    if (ownership != TileItem.OWNERSHIP_NONE
+                            && (ownership != TileItem.OWNERSHIP_SELF || !rolled))
                         return true;
                     found = true;
                 }
